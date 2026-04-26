@@ -14,7 +14,7 @@ OUTPUT = os.path.join(BASE_DIR, "outputs")
 os.makedirs(UPLOAD, exist_ok=True)
 os.makedirs(OUTPUT, exist_ok=True)
 
-POPPLER_PATH = r"C:\Users\rao\Documents\work\poppler-25.12.0\Library\bin"
+POPPLER_PATH = None
 
 FRONT_CROP = (5565, 7128, 478, 2928)
 BACK_CROP  = (5570, 7128, 3031, 5476)
@@ -99,4 +99,4 @@ def file(name):
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=True)
