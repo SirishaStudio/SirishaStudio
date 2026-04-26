@@ -1,0 +1,117 @@
+import os
+import re
+from PIL import Image, ImageOps
+from pathlib import Path
+
+def add_border(image, border_px, color='black'):
+    """Adds a thin black border to the card."""
+    return ImageOps.expand(image, border=border_px, fill=color)
+
+def natural_sort_key(s):
+    """Sorts 1, 2, 10 instead of 1, 10, 2."""
+    return [int(text) if text.isdigit() else text.lower() for text in re.split('([0-9]+)', str(s))]
+
+def get_next_page_index(print_dir):
+    """Checks the Prints folder and finds the highest existing page number."""
+    if not print_dir.exists():
+        return 1
+    existing_files = os.listdir(print_dir)
+    max_num = 0
+    for f in existing_files:
+        match = re.search(r'Page_(\d+)', f)
+        if match:
+            num = int(match.group(1))
+            if num > max_num:
+                max_num = num
+    return max_num + 1
+
+def create_printable_a4_batch():
+    CURRENT_DIR = Path.cwd() 
+    PRINT_DIR = CURRENT_DIR / "Prints"
+    PRINT_DIR.mkdir(exist_ok=True)
+
+    print(f"--- Processing folder at 700 DPI: {CURRENT_DIR} ---")
+
+    # --- UPDATED FOR 700 DPI ---
+    DPI = 700
+    A4_W, A4_H = int(210 * DPI / 25.4), int(297 * DPI / 25.4)
+    CARD_W, CARD_H = int(85.6 * DPI / 25.4), int(53.98 * DPI / 25.4)
+    
+    # Scaling pixel gaps for 700 DPI (Original 300 DPI values x 2.33)
+    GAP_PX = 93       # Original 40 * (700/300)
+    BORDER_PX = 7     # Original 3 * (700/300)
+    MARGIN_Y = 140    # Original 60 * (700/300)
+    CENTER_GAP = 63   # Original 27 * (700/300) to maintain physical distance
+    
+    # Finds any JPG ending in 'f'
+    front_files = sorted([f for f in CURRENT_DIR.glob("*[fF].[jJ][pP][gG]")], key=natural_sort_key)
+
+    if not front_files:
+        print(f"No files ending in 'f.jpg' found in this directory.")
+        return
+
+    page_counter = get_next_page_index(PRINT_DIR)
+    print(f"Starting/Resuming from Page: {page_counter}")
+
+    def new_canvas():
+        return Image.new('RGB', (A4_W, A4_H), 'white')
+
+    a4_canvas = new_canvas()
+    current_y = MARGIN_Y
+
+    for front_path in front_files:
+        ext = front_path.suffix
+        base_name = front_path.stem
+        
+        # Determine back side name
+        if base_name.lower().endswith('f'):
+            back_name = base_name[:-1] + 'b' + ext
+        else:
+            continue
+            
+        back_path = CURRENT_DIR / back_name
+
+        if not back_path.exists():
+            back_path = CURRENT_DIR / back_name.replace('b' + ext, 'B' + ext)
+            if not back_path.exists():
+                print(f"Warning: Missing back side for '{front_path.name}'. Skipping.")
+                continue
+
+        try:
+            # Load and resize to standard Aadhar physical size at 700 DPI
+            f_img = Image.open(front_path).convert("RGB").resize((CARD_W, CARD_H), Image.Resampling.LANCZOS)
+            b_img = Image.open(back_path).convert("RGB").resize((CARD_W, CARD_H), Image.Resampling.LANCZOS)
+            
+            f_img = add_border(f_img, BORDER_PX)
+            b_img = add_border(b_img, BORDER_PX)
+
+            # Pagination Logic
+            if current_y + f_img.height + GAP_PX > A4_H:
+                output_path = PRINT_DIR / f"Printable_Batch_Page_{page_counter}.jpg"
+                a4_canvas.save(output_path, "JPEG", quality=98, dpi=(DPI, DPI))
+                print(f"Saved Page {page_counter}")
+                
+                page_counter += 1
+                a4_canvas = new_canvas()
+                current_y = MARGIN_Y
+
+            # Center alignment with the requested gap
+            front_x = (A4_W // 2) - f_img.width - (CENTER_GAP // 2)
+            back_x = (A4_W // 2) + (CENTER_GAP // 2)
+
+            a4_canvas.paste(f_img, (front_x, current_y))
+            a4_canvas.paste(b_img, (back_x, current_y))
+            
+            current_y += f_img.height + GAP_PX
+
+        except Exception as e:
+            print(f"Error processing {front_path.name}: {e}")
+
+    # Final Save
+    final_path = PRINT_DIR / f"Printable_Batch_Page_{page_counter}.jpg"
+    a4_canvas.save(final_path, "JPEG", quality=98, dpi=(DPI, DPI))
+    print(f"\nSUCCESS: Final Page {page_counter} saved at {DPI} DPI.")
+    input("Process complete. Press Enter to exit...")
+
+if __name__ == "__main__":
+    create_printable_a4_batch()

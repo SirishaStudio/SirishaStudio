@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>{{ title }} — Studio</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+
+<div class="topbar">
+  <a class="back-link" href="/">← All tools</a>
+  <span class="brand">SIRISHA STUDIO</span>
+</div>
+
+<h2>{{ title }}</h2>
+
+<div class="upload-bar">
+  <input type="file" id="file" accept="{{ accept }}">
+  {% if needs_password %}
+    <input type="password" id="password" placeholder="PDF Password (auto if filename matches)">
+  {% endif %}
+  <button class="btn primary" onclick="upload()">⚙ Process</button>
+  <button class="btn" onclick="undo()">↩ Undo</button>
+  <button class="btn" onclick="redo()">↪ Redo</button>
+  <button class="btn" onclick="printA4()">🖨 Print A4</button>
+</div>
+
+<p id="status"></p>
+<div id="sig" style="text-align:center"></div>
+
+<div id="area">
+  <div class="canvases">
+    <canvas id="img" class="single"></canvas>
+  </div>
+
+  <div class="controls-row">
+
+    <div class="controls">
+      <div class="title">GLOBAL · WHOLE PAGE</div>
+      <div class="row">
+        <label>Black</label>
+        <input type="range" id="g_black" min="0" max="255" value="{{ defaults.g_black }}">
+        <span class="val" id="g_black_v">{{ defaults.g_black }}</span>
+      </div>
+      <div class="row">
+        <label>Gamma</label>
+        <input type="range" id="g_gamma" min="0.1" max="3" step="0.1" value="{{ defaults.g_gamma }}">
+        <span class="val" id="g_gamma_v">{{ defaults.g_gamma }}</span>
+      </div>
+    </div>
+
+    {% if photo_region %}
+    <div class="controls">
+      <div class="title">PHOTO · FRONT REGION</div>
+      <div class="row">
+        <label>White</label>
+        <input type="range" id="p_white" min="0" max="255" value="{{ defaults.p_white }}">
+        <span class="val" id="p_white_v">{{ defaults.p_white }}</span>
+      </div>
+      <div class="row">
+        <label>Gamma</label>
+        <input type="range" id="p_gamma" min="0.1" max="3" step="0.1" value="{{ defaults.p_gamma }}">
+        <span class="val" id="p_gamma_v">{{ defaults.p_gamma }}</span>
+      </div>
+    </div>
+    {% endif %}
+
+  </div>
+</div>
+
+<script>
+  window.TOOL_CONFIG = {
+    process_url: {{ process_url|tojson }},
+    photo_region: {{ photo_region|tojson }}
+  };
+</script>
+<script src="{{ url_for('static', filename='js/print_a4.js') }}"></script>
+<script src="{{ url_for('static', filename='js/single_tool.js') }}"></script>
+
+</body>
+</html>

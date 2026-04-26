@@ -1,0 +1,83 @@
+import os
+import cv2
+import numpy as np
+from pdf2image import convert_from_path
+import shutil
+import re
+from pathlib import Path
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+POPPLER_PATH = r"C:\Users\rao\Documents\work\poppler-25.12.0\Library\bin"
+OUTPUT_DIR = os.path.join(BASE_DIR, "output")
+TEMP_DIR = os.path.join(BASE_DIR, "temp")
+
+CROP_W = 2464
+CROP_H = 1543
+X_START = 0 
+Y_START = 0 
+
+ALPHA = 1.2  
+BETA = -40   
+
+os.makedirs(OUTPUT_DIR, exist_ok=True)
+os.makedirs(TEMP_DIR, exist_ok=True)
+
+def apply_levels(image):
+    return cv2.convertScaleAbs(image, alpha=ALPHA, beta=BETA)
+
+def get_next_index(directory):
+    existing_files = os.listdir(directory)
+    max_num = 0
+    for f in existing_files:
+        match = re.match(r'^(\d+)', f)
+        if match:
+            num = int(match.group(1))
+            if num > max_num: max_num = num
+    return max_num + 1
+
+def move_to_temp_safely(source_path, temp_dir):
+    original_filename = Path(source_path).name
+    destination_path = Path(temp_dir) / original_filename
+    counter = 1
+    while destination_path.exists():
+        new_filename = f"{Path(source_path).stem}_{counter}{Path(source_path).suffix}"
+        destination_path = Path(temp_dir) / new_filename
+        counter += 1
+    shutil.move(source_path, str(destination_path))
+
+def process_rc_pdfs():
+    script_name = os.path.basename(__file__)
+    files = [f for f in os.listdir(BASE_DIR) if os.path.isfile(os.path.join(BASE_DIR, f)) 
+             and f.lower().endswith('.pdf') and f != script_name]
+    
+    if not files:
+        return
+
+    card_index = get_next_index(OUTPUT_DIR)
+
+    for filename in files:
+        input_path = os.path.join(BASE_DIR, filename)
+        try:
+            pages = convert_from_path(input_path, dpi=700, poppler_path=POPPLER_PATH)
+            
+            if len(pages) >= 1:
+                front_img = cv2.cvtColor(np.array(pages[0]), cv2.COLOR_RGB2BGR)
+                front_crop = front_img[Y_START : Y_START + CROP_H, X_START : X_START + CROP_W]
+                cv2.imwrite(os.path.join(OUTPUT_DIR, f"{card_index}f.jpg"), apply_levels(front_crop), [int(cv2.IMWRITE_JPEG_QUALITY), 95])
+                del front_img
+            
+            if len(pages) >= 2:
+                back_img = cv2.cvtColor(np.array(pages[1]), cv2.COLOR_RGB2BGR)
+                back_crop = back_img[Y_START : Y_START + CROP_H, X_START : X_START + CROP_W]
+                cv2.imwrite(os.path.join(OUTPUT_DIR, f"{card_index}b.jpg"), apply_levels(back_crop), [int(cv2.IMWRITE_JPEG_QUALITY), 95])
+                del back_img
+
+            pages.clear()
+            move_to_temp_safely(input_path, TEMP_DIR)
+            card_index += 1
+
+        except Exception as e:
+            print(f"Error: {e}")
+
+if __name__ == "__main__":
+    process_rc_pdfs()

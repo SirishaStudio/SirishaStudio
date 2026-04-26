@@ -1,0 +1,81 @@
+import os
+import cv2
+import numpy as np
+from pdf2image import convert_from_path
+import shutil
+import re
+from pathlib import Path
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+POPPLER_PATH = r"C:\Users\rao\Documents\work\poppler-25.12.0\Library\bin"
+OUTPUT_DIR = os.path.join(BASE_DIR, "output")
+TEMP_DIR = os.path.join(BASE_DIR, "temp")
+
+os.makedirs(OUTPUT_DIR, exist_ok=True)
+os.makedirs(TEMP_DIR, exist_ok=True)
+
+def get_next_index(directory):
+    existing_files = os.listdir(directory)
+    max_num = 0
+    for f in existing_files:
+        match = re.match(r'^(\d+)', f)
+        if match:
+            num = int(match.group(1))
+            if num > max_num:
+                max_num = num
+    return max_num + 1
+
+def move_to_temp_safely(source_path, temp_dir):
+    original_filename = Path(source_path).name
+    destination_path = Path(temp_dir) / original_filename
+    counter = 1
+    while destination_path.exists():
+        new_filename = f"{Path(source_path).stem}_{counter}{Path(source_path).suffix}"
+        destination_path = Path(temp_dir) / new_filename
+        counter += 1
+    shutil.move(source_path, str(destination_path))
+
+def process_voter_cards():
+    script_name = os.path.basename(__file__)
+    files = [f for f in os.listdir(BASE_DIR) 
+             if os.path.isfile(os.path.join(BASE_DIR, f)) 
+             and f.lower().endswith(('.pdf', '.jpg', '.jpeg', '.png'))
+             and f != script_name]
+
+    if not files:
+        return
+
+    card_index = get_next_index(OUTPUT_DIR)
+
+    for filename in files:
+        input_path = os.path.join(BASE_DIR, filename)
+        ext = Path(filename).suffix.lower()
+        
+        try:
+            full_page = None
+            if ext == '.pdf':
+                pages = convert_from_path(input_path, dpi=700, poppler_path=POPPLER_PATH)
+                full_page = cv2.cvtColor(np.array(pages[0]), cv2.COLOR_RGB2BGR) 
+            elif ext in ['.jpg', '.jpeg', '.png']:
+                full_page = cv2.imread(input_path)
+
+            if full_page is None or full_page.size == 0:
+                continue
+
+            front_card = full_page[925:2415, 320:2690] 
+            back_card = full_page[925:2420, 3178:5555]
+
+            front_name = f"{card_index}f.jpg"
+            back_name = f"{card_index}b.jpg"
+            
+            cv2.imwrite(os.path.join(OUTPUT_DIR, front_name), front_card, [int(cv2.IMWRITE_JPEG_QUALITY), 95])
+            cv2.imwrite(os.path.join(OUTPUT_DIR, back_name), back_card, [int(cv2.IMWRITE_JPEG_QUALITY), 95])
+            
+            move_to_temp_safely(input_path, TEMP_DIR)
+            card_index += 1
+
+        except Exception as e:
+            print(f"Error: {e}")
+
+if __name__ == "__main__":
+    process_voter_cards()

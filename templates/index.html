@@ -1,9 +1,28 @@
 <!DOCTYPE html>
-<html>
-<body style="background:#111;color:white;text-align:center">
-<h1>Studio</h1>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Sirisha Studio</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+  <div class="topbar">
+    <span class="brand">SIRISHA STUDIO</span>
+    <span class="back-link">card processor</span>
+  </div>
 
-<br>
-<button onclick="location.href='/aadhar'">Aadhar Tool</button>
-<br></body>
+  <h1>Studio</h1>
+  <p style="text-align:center;color:var(--muted);font-size:13px;margin-top:0">
+    Pick a tool below.
+  </p>
+
+  <div class="tiles">
+    {% for t in tools %}
+    <a class="tile" href="{{ t.href }}">
+      <div class="t">{{ t.title }}</div>
+      <div class="d">{{ t.desc }}</div>
+    </a>
+    {% endfor %}
+  </div>
+</body>
 </html>
