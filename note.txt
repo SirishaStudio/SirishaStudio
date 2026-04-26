@@ -1,0 +1,6 @@
+hey replit, please dont over do anything . like i want you to just use these things without using your sql or something ill locallyuse this i added this code to github to give u and im expect u will make everything work on neatly 
+i want toggle button to toggle short aadhar (which i already have) and long [which u also need to add now , it should display the image on screen and also allow me to colorize the parts 
+and also please add coordinates in website for me so i can copy em when i select the area i want to pick as image and rest of the area for background text dark feature like we did in short aadhar ... and also u dont need to remove the area of erase area in long aadhar toggling ok ? ]
+
+and after all , give me cool css for it and in simple way i want to send the coordinates to the chatgpt later on for it to udnerstand and give  my light adjustments feature . 
+and also mainly use differenet files for htmls like short , long and others if needed . and long py or something u need instead pushing all your code into one app.py ok ? 

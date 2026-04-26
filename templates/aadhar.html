@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+body {background:#0f172a;color:white;text-align:center;font-family:sans-serif;}
+canvas {width:350px;margin:10px;border-radius:10px;border:1px solid #444;}
+.controls {margin:10px;padding:10px;background:#1e293b;border-radius:10px;}
+input {width:200px;}
+</style>
+</head>
+
+<body>
+
+<h2>Aadhar Tool</h2>
+
+<input type="file" id="file"><br><br>
+<input type="password" id="password" placeholder="PDF Password"><br><br>
+
+<button onclick="upload()">⚙️ Process</button>
+<button onclick="undo()">↩ Undo</button>
+
+<p id="status"></p>
+
+<div id="area" style="display:none">
+
+<canvas id="front"></canvas>
+<canvas id="back"></canvas>
+
+<div class="controls">
+<h3>GLOBAL (Both Images)</h3>
+Black <input type="range" id="g_black" min="0" max="255" value="0"><br>
+White <input type="range" id="g_white" min="0" max="255" value="255"><br>
+Gamma <input type="range" id="g_gamma" min="0.1" max="3" step="0.1" value="1"><br>
+</div>
+
+<div class="controls">
+<h3>PHOTO ONLY (Front)</h3>
+Black <input type="range" id="p_black" min="0" max="255" value="0"><br>
+White <input type="range" id="p_white" min="0" max="255" value="255"><br>
+Gamma <input type="range" id="p_gamma" min="0.1" max="3" step="0.1" value="1"><br>
+</div>
+
+</div>
+
+<script>
+
+let frontCanvas = document.getElementById("front");
+let backCanvas  = document.getElementById("back");
+
+let fctx = frontCanvas.getContext("2d");
+let bctx = backCanvas.getContext("2d");
+
+let originalFront, originalBack;
+let history = [];
+
+// ===== COORDINATES =====
+const PHOTO = {x:223, y:338, w:516, h:633};
+const ERASE = {x:2189, y:0, w:188, h:28};
+
+
+// ===== UPLOAD =====
+function upload(){
+
+    let file = document.getElementById("file").files[0];
+    let pass = document.getElementById("password").value;
+
+    let fd = new FormData();
+    fd.append("file", file);
+    fd.append("password", pass);
+
+    fetch("/process-aadhar",{method:"POST",body:fd})
+    .then(r=>r.json())
+    .then(d=>{
+
+        if(d.ask_password){
+            document.getElementById("status").innerText="Wrong password";
+            return;
+        }
+
+        load(frontCanvas, fctx, d.front, true);
+        load(backCanvas, bctx, d.back, false);
+
+        document.getElementById("area").style.display="block";
+    });
+}
+
+
+// ===== LOAD IMAGE =====
+function load(canvas, ctx, src, isFront){
+
+    let img = new Image();
+    img.src = src;
+
+    img.onload = ()=>{
+        canvas.width = img.width;
+        canvas.height = img.height;
+        ctx.drawImage(img,0,0);
+
+        if(isFront) originalFront = ctx.getImageData(0,0,canvas.width,canvas.height);
+        else originalBack = ctx.getImageData(0,0,canvas.width,canvas.height);
+    };
+}
+
+
+// ===== LEVELS FUNCTION =====
+function applyLevels(data, inBlack, inWhite, gamma){
+
+    let out = new Uint8ClampedArray(data.length);
+
+    for(let i=0;i<data.length;i+=4){
+
+        for(let c=0;c<3;c++){
+
+            let v = data[i+c];
+
+            // preserve white
+            if(v > 240){
+                out[i+c] = 255;
+                continue;
+            }
+
+            let norm = (v - inBlack) / (inWhite - inBlack);
+            norm = Math.max(0, Math.min(1, norm));
+
+            let g = Math.pow(norm, 1/gamma);
+
+            out[i+c] = Math.max(0, Math.min(255, g*255));
+        }
+
+        out[i+3] = data[i+3];
+    }
+
+    return out;
+}
+
+
+// ===== APPLY =====
+function update(){
+
+    history.push({
+        f: new ImageData(new Uint8ClampedArray(originalFront.data), originalFront.width),
+        b: new ImageData(new Uint8ClampedArray(originalBack.data), originalBack.width)
+    });
+
+    let gB = +g_black.value;
+    let gW = +g_white.value;
+    let gG = +g_gamma.value;
+
+    let pB = +p_black.value;
+    let pW = +p_white.value;
+    let pG = +p_gamma.value;
+
+
+    // FRONT
+    let f = new ImageData(new Uint8ClampedArray(originalFront.data), originalFront.width);
+
+    let global = applyLevels(f.data, gB, gW, gG);
+
+    // apply global first
+    f.data.set(global);
+
+    // apply photo separately
+    for(let y=PHOTO.y; y<PHOTO.y+PHOTO.h; y++){
+        for(let x=PHOTO.x; x<PHOTO.x+PHOTO.w; x++){
+
+            let i = (y*f.width + x)*4;
+
+            for(let c=0;c<3;c++){
+                let v = originalFront.data[i+c];
+
+                let norm = (v - pB) / (pW - pB);
+                norm = Math.max(0, Math.min(1, norm));
+
+                let g = Math.pow(norm, 1/pG);
+                f.data[i+c] = Math.max(0, Math.min(255, g*255));
+            }
+        }
+    }
+
+    // erase
+    eraseArea(f);
+
+
+    // BACK
+    let b = new ImageData(new Uint8ClampedArray(originalBack.data), originalBack.width);
+    let backGlobal = applyLevels(b.data, gB, gW, gG);
+    b.data.set(backGlobal);
+
+    eraseArea(b);
+
+
+    fctx.putImageData(f,0,0);
+    bctx.putImageData(b,0,0);
+}
+
+
+// ===== ERASE =====
+function eraseArea(img){
+
+    for(let y=ERASE.y; y<ERASE.y+ERASE.h; y++){
+        for(let x=ERASE.x; x<ERASE.x+ERASE.w; x++){
+
+            let i = (y*img.width + x)*4;
+
+            img.data[i]=255;
+            img.data[i+1]=255;
+            img.data[i+2]=255;
+        }
+    }
+}
+
+
+// ===== UNDO =====
+function undo(){
+    if(history.length === 0) return;
+
+    let last = history.pop();
+
+    fctx.putImageData(last.f,0,0);
+    bctx.putImageData(last.b,0,0);
+}
+
+
+// ===== AUTO UPDATE =====
+document.querySelectorAll("input[type=range]").forEach(el=>{
+    el.oninput = ()=>{
+        update();
+    };
+});
+
+</script>
+
+</body>
+</html>
