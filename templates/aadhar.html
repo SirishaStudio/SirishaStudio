@@ -1,11 +1,207 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+<meta charset="UTF-8">
+<title>Aadhar Tool</title>
 <style>
-body {background:#0f172a;color:white;text-align:center;font-family:sans-serif;}
-canvas {width:350px;margin:10px;border-radius:10px;border:1px solid #444;}
-.controls {margin:10px;padding:10px;background:#1e293b;border-radius:10px;}
-input {width:200px;}
+:root{
+  --bg:#0a0f1c;
+  --panel:#141c2f;
+  --panel-2:#1c2540;
+  --accent:#3b82f6;
+  --accent-2:#8b5cf6;
+  --text:#e6ecff;
+  --muted:#8a96b8;
+  --border:#27314d;
+  --danger:#ef4444;
+}
+
+*{box-sizing:border-box;}
+
+body{
+  margin:0;
+  background:radial-gradient(1200px 600px at 50% -10%, #1b274a 0%, var(--bg) 60%);
+  color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  min-height:100vh;
+  padding:20px 16px 40px;
+}
+
+h2{
+  text-align:center;
+  margin:0 0 16px;
+  font-weight:600;
+  letter-spacing:0.5px;
+}
+
+/* ---------- TOGGLE ---------- */
+.toggle{
+  display:flex;
+  justify-content:center;
+  gap:0;
+  margin:0 auto 18px;
+  width:fit-content;
+  background:var(--panel);
+  border:1px solid var(--border);
+  border-radius:10px;
+  padding:4px;
+}
+.toggle button{
+  background:transparent;
+  border:none;
+  color:var(--muted);
+  padding:8px 18px;
+  border-radius:8px;
+  cursor:pointer;
+  font-size:12px;
+  font-weight:600;
+  letter-spacing:0.6px;
+  transition:all 0.2s;
+}
+.toggle button.active{
+  background:linear-gradient(135deg, var(--accent), var(--accent-2));
+  color:white;
+  box-shadow:0 4px 12px rgba(59,130,246,0.35);
+}
+
+/* ---------- UPLOAD BAR ---------- */
+.upload-bar{
+  display:flex;
+  flex-wrap:wrap;
+  justify-content:center;
+  align-items:center;
+  gap:8px;
+  margin:0 auto 12px;
+  max-width:820px;
+}
+
+input[type=file], input[type=password]{
+  background:var(--panel);
+  color:var(--text);
+  border:1px solid var(--border);
+  padding:7px 11px;
+  border-radius:8px;
+  font-size:12px;
+  outline:none;
+}
+input[type=file]::file-selector-button{
+  background:var(--panel-2);
+  color:var(--text);
+  border:1px solid var(--border);
+  padding:4px 9px;
+  border-radius:6px;
+  cursor:pointer;
+  margin-right:9px;
+  font-size:12px;
+}
+
+.btn{
+  background:var(--panel-2);
+  color:var(--text);
+  border:1px solid var(--border);
+  padding:7px 13px;
+  border-radius:8px;
+  cursor:pointer;
+  font-size:12px;
+  font-weight:500;
+  transition:all 0.15s;
+}
+.btn:hover{ background:#243259; }
+.btn.primary{
+  background:linear-gradient(135deg, var(--accent), var(--accent-2));
+  border-color:transparent;
+  font-weight:600;
+}
+.btn.primary:hover{ filter:brightness(1.1); }
+
+#status{
+  text-align:center;
+  color:var(--muted);
+  min-height:18px;
+  font-size:12px;
+  margin:8px 0;
+}
+#status.err{ color:var(--danger); }
+
+/* ---------- CANVASES ---------- */
+#area{ display:none; text-align:center; }
+
+.canvases{
+  display:flex;
+  justify-content:center;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:6px 0 14px;
+}
+canvas{
+  width:300px;
+  border-radius:10px;
+  border:1px solid var(--border);
+  background:white;
+}
+
+/* ---------- COMPACT CONTROL CARDS ---------- */
+.controls-row{
+  display:flex;
+  justify-content:center;
+  flex-wrap:wrap;
+  gap:10px;
+}
+.controls{
+  background:var(--panel);
+  border:1px solid var(--border);
+  border-radius:10px;
+  padding:9px 12px;
+  width:230px;
+  font-size:11px;
+  text-align:left;
+}
+.controls .title{
+  font-size:10px;
+  font-weight:700;
+  letter-spacing:1px;
+  color:var(--accent);
+  margin-bottom:6px;
+  text-align:center;
+}
+.row{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  margin:4px 0;
+}
+.row label{
+  width:46px;
+  color:var(--muted);
+  font-size:11px;
+}
+.row input[type=range]{
+  flex:1;
+  accent-color:var(--accent);
+  height:14px;
+}
+.row .val{
+  width:34px;
+  text-align:right;
+  color:var(--text);
+  font-size:11px;
+  font-variant-numeric:tabular-nums;
+}
+
+/* ---------- LONG MODE PLACEHOLDER ---------- */
+.long-placeholder{
+  margin:40px auto;
+  max-width:540px;
+  background:var(--panel);
+  border:1px dashed var(--border);
+  border-radius:12px;
+  padding:28px 22px;
+  color:var(--muted);
+  font-size:14px;
+  line-height:1.6;
+  text-align:center;
+}
+.long-placeholder b{ color:var(--text); }
 </style>
 </head>
 
@@ -13,221 +209,301 @@ input {width:200px;}
 
 <h2>Aadhar Tool</h2>
 
-<input type="file" id="file"><br><br>
-<input type="password" id="password" placeholder="PDF Password"><br><br>
-
-<button onclick="upload()">⚙️ Process</button>
-<button onclick="undo()">↩ Undo</button>
-
-<p id="status"></p>
-
-<div id="area" style="display:none">
-
-<canvas id="front"></canvas>
-<canvas id="back"></canvas>
-
-<div class="controls">
-<h3>GLOBAL (Both Images)</h3>
-Black <input type="range" id="g_black" min="0" max="255" value="0"><br>
-White <input type="range" id="g_white" min="0" max="255" value="255"><br>
-Gamma <input type="range" id="g_gamma" min="0.1" max="3" step="0.1" value="1"><br>
+<div class="toggle">
+  <button id="btn-short" class="active" onclick="setMode('short')">SHORT AADHAR</button>
+  <button id="btn-long" onclick="setMode('long')">LONG AADHAR</button>
 </div>
 
-<div class="controls">
-<h3>PHOTO ONLY (Front)</h3>
-Black <input type="range" id="p_black" min="0" max="255" value="0"><br>
-White <input type="range" id="p_white" min="0" max="255" value="255"><br>
-Gamma <input type="range" id="p_gamma" min="0.1" max="3" step="0.1" value="1"><br>
+<!-- ============ SHORT MODE ============ -->
+<div id="short-mode">
+
+  <div class="upload-bar">
+    <input type="file" id="file">
+    <input type="password" id="password" placeholder="PDF Password">
+    <button class="btn primary" onclick="upload()">⚙ Process</button>
+    <button class="btn" onclick="undo()">↩ Undo</button>
+    <button class="btn" onclick="redo()">↪ Redo</button>
+    <button class="btn" onclick="printA4()">🖨 Print A4</button>
+  </div>
+
+  <p id="status"></p>
+
+  <div id="area">
+
+    <div class="canvases">
+      <canvas id="front"></canvas>
+      <canvas id="back"></canvas>
+    </div>
+
+    <div class="controls-row">
+
+      <div class="controls">
+        <div class="title">GLOBAL · BOTH IMAGES</div>
+        <div class="row">
+          <label>Black</label>
+          <input type="range" id="g_black" min="0" max="255" value="128">
+          <span class="val" id="g_black_v">128</span>
+        </div>
+        <div class="row">
+          <label>Gamma</label>
+          <input type="range" id="g_gamma" min="0.1" max="3" step="0.1" value="0.5">
+          <span class="val" id="g_gamma_v">0.5</span>
+        </div>
+      </div>
+
+      <div class="controls">
+        <div class="title">PHOTO · FRONT ONLY</div>
+        <div class="row">
+          <label>White</label>
+          <input type="range" id="p_white" min="0" max="255" value="255">
+          <span class="val" id="p_white_v">255</span>
+        </div>
+        <div class="row">
+          <label>Gamma</label>
+          <input type="range" id="p_gamma" min="0.1" max="3" step="0.1" value="1">
+          <span class="val" id="p_gamma_v">1.0</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
 </div>
 
+<!-- ============ LONG MODE (placeholder until you give specs) ============ -->
+<div id="long-mode" style="display:none">
+  <div class="long-placeholder">
+    <b>LONG AADHAR — coming next.</b><br><br>
+    Tell me how you want this mode to work
+    (image to display, areas to colorize, coordinate picker, etc.)
+    and I'll wire it up here in its own template + python module.
+  </div>
 </div>
 
 <script>
+// ===================== STATE =====================
+let mode = "short";
 
-let frontCanvas = document.getElementById("front");
-let backCanvas  = document.getElementById("back");
+const frontCanvas = document.getElementById("front");
+const backCanvas  = document.getElementById("back");
+const fctx = frontCanvas.getContext("2d");
+const bctx = backCanvas.getContext("2d");
 
-let fctx = frontCanvas.getContext("2d");
-let bctx = backCanvas.getContext("2d");
+let originalFront = null;
+let originalBack  = null;
 
-let originalFront, originalBack;
-let history = [];
+let history   = [];
+let redoStack = [];
 
-// ===== COORDINATES =====
-const PHOTO = {x:223, y:338, w:516, h:633};
-const ERASE = {x:2189, y:0, w:188, h:28};
+// ===================== COORDS =====================
+const PHOTO = { x:223,  y:338, w:516, h:633 };
+const ERASE = { x:2189, y:0,   w:188, h:28  };
 
+// ===================== TOGGLE =====================
+function setMode(m){
+  mode = m;
+  document.getElementById("btn-short").classList.toggle("active", m === "short");
+  document.getElementById("btn-long" ).classList.toggle("active", m === "long");
+  document.getElementById("short-mode").style.display = (m === "short") ? "block" : "none";
+  document.getElementById("long-mode" ).style.display = (m === "long")  ? "block" : "none";
+}
 
-// ===== UPLOAD =====
+// ===================== STATUS =====================
+function setStatus(msg, isError=false){
+  const el = document.getElementById("status");
+  el.innerText = msg;
+  el.classList.toggle("err", isError);
+}
+
+// ===================== UPLOAD =====================
 function upload(){
+  const fileEl = document.getElementById("file");
+  const passEl = document.getElementById("password");
+  const file = fileEl.files[0];
+  if(!file){ setStatus("Pick a file first.", true); return; }
 
-    let file = document.getElementById("file").files[0];
-    let pass = document.getElementById("password").value;
+  const fd = new FormData();
+  fd.append("file", file);
+  fd.append("password", passEl.value);
 
-    let fd = new FormData();
-    fd.append("file", file);
-    fd.append("password", pass);
+  setStatus("Processing…");
 
-    fetch("/process-aadhar",{method:"POST",body:fd})
-    .then(r=>r.json())
-    .then(d=>{
+  fetch("/process-aadhar", { method:"POST", body:fd })
+    .then(r => r.json())
+    .then(d => {
+      if(d.ask_password){ setStatus("Wrong / missing PDF password.", true); return; }
+      if(d.error){ setStatus(d.error, true); return; }
 
-        if(d.ask_password){
-            document.getElementById("status").innerText="Wrong password";
-            return;
-        }
+      setStatus("");
+      // reset history each new file
+      history = []; redoStack = [];
+      originalFront = null; originalBack = null;
 
-        load(frontCanvas, fctx, d.front, true);
-        load(backCanvas, bctx, d.back, false);
-
-        document.getElementById("area").style.display="block";
-    });
+      load(frontCanvas, fctx, d.front, true);
+      load(backCanvas,  bctx, d.back,  false);
+      document.getElementById("area").style.display = "block";
+    })
+    .catch(e => setStatus("Error: " + e, true));
 }
 
-
-// ===== LOAD IMAGE =====
+// ===================== LOAD =====================
 function load(canvas, ctx, src, isFront){
+  const img = new Image();
+  img.onload = () => {
+    canvas.width  = img.width;
+    canvas.height = img.height;
+    ctx.drawImage(img, 0, 0);
 
-    let img = new Image();
-    img.src = src;
+    const data = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    if(isFront) originalFront = data; else originalBack = data;
 
-    img.onload = ()=>{
-        canvas.width = img.width;
-        canvas.height = img.height;
-        ctx.drawImage(img,0,0);
-
-        if(isFront) originalFront = ctx.getImageData(0,0,canvas.width,canvas.height);
-        else originalBack = ctx.getImageData(0,0,canvas.width,canvas.height);
-    };
+    // auto-apply (defaults + erase) once both halves are loaded
+    if(originalFront && originalBack) apply(true);
+  };
+  img.src = src;
 }
 
+// ===================== LEVELS =====================
+function levels(v, black, gamma){
+  if(v > 240) return 255;             // preserve paper white
+  let n = (v - black) / (255 - black);
+  n = Math.max(0, Math.min(1, n));
+  return Math.pow(n, 1/gamma) * 255;
+}
 
-// ===== LEVELS FUNCTION =====
-function applyLevels(data, inBlack, inWhite, gamma){
+// ===================== HISTORY =====================
+function snapshot(){
+  history.push({
+    f: fctx.getImageData(0, 0, frontCanvas.width, frontCanvas.height),
+    b: bctx.getImageData(0, 0, backCanvas.width,  backCanvas.height)
+  });
+  if(history.length > 30) history.shift();
+}
 
-    let out = new Uint8ClampedArray(data.length);
+// ===================== APPLY =====================
+function apply(initial = false){
+  if(!originalFront || !originalBack) return;
 
-    for(let i=0;i<data.length;i+=4){
+  if(!initial){
+    snapshot();
+    redoStack = [];
+  }
 
-        for(let c=0;c<3;c++){
+  const gB = +g_black.value;
+  const gG = +g_gamma.value;
+  const pW = +p_white.value;
+  const pG = +p_gamma.value;
 
-            let v = data[i+c];
+  // live readout
+  g_black_v.innerText = gB;
+  g_gamma_v.innerText = gG.toFixed(1);
+  p_white_v.innerText = pW;
+  p_gamma_v.innerText = pG.toFixed(1);
 
-            // preserve white
-            if(v > 240){
-                out[i+c] = 255;
-                continue;
-            }
+  // ---- FRONT (with PHOTO region exception) ----
+  const f  = new ImageData(new Uint8ClampedArray(originalFront.data), originalFront.width);
+  const fw = f.width;
 
-            let norm = (v - inBlack) / (inWhite - inBlack);
-            norm = Math.max(0, Math.min(1, norm));
+  for(let i = 0; i < f.data.length; i += 4){
+    const px = i >> 2;
+    const x  = px % fw;
+    const y  = (px / fw) | 0;
+    const isPhoto = (x > PHOTO.x && x < PHOTO.x + PHOTO.w &&
+                     y > PHOTO.y && y < PHOTO.y + PHOTO.h);
 
-            let g = Math.pow(norm, 1/gamma);
-
-            out[i+c] = Math.max(0, Math.min(255, g*255));
-        }
-
-        out[i+3] = data[i+3];
+    for(let c = 0; c < 3; c++){
+      const v = originalFront.data[i + c];
+      if(isPhoto){
+        let n = v / pW;
+        n = Math.pow(n, 1/pG);
+        f.data[i + c] = Math.max(0, Math.min(255, n * 255));
+      } else {
+        f.data[i + c] = levels(v, gB, gG);
+      }
     }
+  }
+  erase(f);
 
-    return out;
-}
-
-
-// ===== APPLY =====
-function update(){
-
-    history.push({
-        f: new ImageData(new Uint8ClampedArray(originalFront.data), originalFront.width),
-        b: new ImageData(new Uint8ClampedArray(originalBack.data), originalBack.width)
-    });
-
-    let gB = +g_black.value;
-    let gW = +g_white.value;
-    let gG = +g_gamma.value;
-
-    let pB = +p_black.value;
-    let pW = +p_white.value;
-    let pG = +p_gamma.value;
-
-
-    // FRONT
-    let f = new ImageData(new Uint8ClampedArray(originalFront.data), originalFront.width);
-
-    let global = applyLevels(f.data, gB, gW, gG);
-
-    // apply global first
-    f.data.set(global);
-
-    // apply photo separately
-    for(let y=PHOTO.y; y<PHOTO.y+PHOTO.h; y++){
-        for(let x=PHOTO.x; x<PHOTO.x+PHOTO.w; x++){
-
-            let i = (y*f.width + x)*4;
-
-            for(let c=0;c<3;c++){
-                let v = originalFront.data[i+c];
-
-                let norm = (v - pB) / (pW - pB);
-                norm = Math.max(0, Math.min(1, norm));
-
-                let g = Math.pow(norm, 1/pG);
-                f.data[i+c] = Math.max(0, Math.min(255, g*255));
-            }
-        }
+  // ---- BACK ----
+  const b = new ImageData(new Uint8ClampedArray(originalBack.data), originalBack.width);
+  for(let i = 0; i < b.data.length; i += 4){
+    for(let c = 0; c < 3; c++){
+      b.data[i + c] = levels(originalBack.data[i + c], gB, gG);
     }
+  }
+  erase(b);
 
-    // erase
-    eraseArea(f);
-
-
-    // BACK
-    let b = new ImageData(new Uint8ClampedArray(originalBack.data), originalBack.width);
-    let backGlobal = applyLevels(b.data, gB, gW, gG);
-    b.data.set(backGlobal);
-
-    eraseArea(b);
-
-
-    fctx.putImageData(f,0,0);
-    bctx.putImageData(b,0,0);
+  fctx.putImageData(f, 0, 0);
+  bctx.putImageData(b, 0, 0);
 }
 
-
-// ===== ERASE =====
-function eraseArea(img){
-
-    for(let y=ERASE.y; y<ERASE.y+ERASE.h; y++){
-        for(let x=ERASE.x; x<ERASE.x+ERASE.w; x++){
-
-            let i = (y*img.width + x)*4;
-
-            img.data[i]=255;
-            img.data[i+1]=255;
-            img.data[i+2]=255;
-        }
+// ===================== ERASE STRIP =====================
+function erase(img){
+  for(let y = ERASE.y; y < ERASE.y + ERASE.h; y++){
+    for(let x = ERASE.x; x < ERASE.x + ERASE.w; x++){
+      const i = (y * img.width + x) * 4;
+      img.data[i] = 255; img.data[i+1] = 255; img.data[i+2] = 255;
     }
+  }
 }
 
-
-// ===== UNDO =====
+// ===================== UNDO / REDO =====================
 function undo(){
-    if(history.length === 0) return;
-
-    let last = history.pop();
-
-    fctx.putImageData(last.f,0,0);
-    bctx.putImageData(last.b,0,0);
+  if(history.length === 0) return;
+  redoStack.push({
+    f: fctx.getImageData(0, 0, frontCanvas.width, frontCanvas.height),
+    b: bctx.getImageData(0, 0, backCanvas.width,  backCanvas.height)
+  });
+  const last = history.pop();
+  fctx.putImageData(last.f, 0, 0);
+  bctx.putImageData(last.b, 0, 0);
 }
 
+function redo(){
+  if(redoStack.length === 0) return;
+  history.push({
+    f: fctx.getImageData(0, 0, frontCanvas.width, frontCanvas.height),
+    b: bctx.getImageData(0, 0, backCanvas.width,  backCanvas.height)
+  });
+  const next = redoStack.pop();
+  fctx.putImageData(next.f, 0, 0);
+  bctx.putImageData(next.b, 0, 0);
+}
 
-// ===== AUTO UPDATE =====
-document.querySelectorAll("input[type=range]").forEach(el=>{
-    el.oninput = ()=>{
-        update();
-    };
+// ===================== PRINT A4 =====================
+function printA4(){
+  if(!originalFront || !originalBack){ setStatus("Process a file first.", true); return; }
+
+  // A4 @ 300 DPI
+  const W = 2480, H = 3508;
+  const c = document.createElement("canvas");
+  c.width = W; c.height = H;
+  const ctx = c.getContext("2d");
+
+  ctx.fillStyle = "white";
+  ctx.fillRect(0, 0, W, H);
+
+  // same layout as your manual print
+  ctx.drawImage(frontCanvas, 200, 300, 800, 500);
+  ctx.drawImage(backCanvas,  1200, 300, 800, 500);
+
+  const url = c.toDataURL("image/jpeg", 0.95);
+  const win = window.open("");
+  win.document.write(`
+    <html><head><title>Print Aadhar</title>
+    <style>
+      @page { size: A4; margin: 0; }
+      body  { margin:0; }
+      img   { width:100%; display:block; }
+    </style></head>
+    <body><img src="${url}" onload="window.print();"></body></html>
+  `);
+  win.document.close();
+}
+
+// ===================== SLIDER EVENTS =====================
+document.querySelectorAll("input[type=range]").forEach(el => {
+  el.oninput = () => apply();
 });
-
 </script>
 
 </body>

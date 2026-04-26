@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+body {background:#0f172a;color:white;text-align:center;font-family:sans-serif;}
+
+canvas {
+    width:300px;
+    margin:10px;
+    border-radius:10px;
+    border:1px solid #444;
+}
+
+.controls {
+    margin:8px auto;
+    padding:8px;
+    background:#1e293b;
+    border-radius:8px;
+    width:260px;
+    font-size:12px;
+}
+
+input[type=range] {
+    width:150px;
+}
+
+button {
+    padding:6px 10px;
+    margin:5px;
+    font-size:12px;
+    cursor:pointer;
+}
+
+.toggle {
+    margin-bottom:10px;
+}
+</style>
+</head>
+
+<body>
+
+<h3>Aadhar Tool</h3>
+
+<div class="toggle">
+<button onclick="mode='short'">SHORT AADHAR</button>
+<button onclick="mode='long'">LONG AADHAR</button>
+</div>
+
+<input type="file" id="file"><br>
+<input type="password" id="password" placeholder="PDF Password"><br>
+
+<button onclick="upload()">⚙️ Process</button>
+<button onclick="undo()">↩ Undo</button>
+<button onclick="redo()">↪ Redo</button>
+<button onclick="printA4()">🖨 Print</button>
+
+<p id="status"></p>
+
+<div id="area" style="display:none">
+
+<canvas id="front"></canvas>
+<canvas id="back"></canvas>
+
+<div class="controls">
+<b>GLOBAL</b><br>
+Black <input type="range" id="g_black" min="0" max="255" value="128"><br>
+Gamma <input type="range" id="g_gamma" min="0.1" max="3" step="0.1" value="0.5">
+</div>
+
+<div class="controls">
+<b>PHOTO</b><br>
+White <input type="range" id="p_white" min="0" max="255" value="255"><br>
+Gamma <input type="range" id="p_gamma" min="0.1" max="3" step="0.1" value="1">
+</div>
+
+</div>
+
+<script>
+
+let mode = "short";
+
+let frontCanvas = document.getElementById("front");
+let backCanvas  = document.getElementById("back");
+
+let fctx = frontCanvas.getContext("2d");
+let bctx = backCanvas.getContext("2d");
+
+let originalFront, originalBack;
+
+let history = [];
+let redoStack = [];
+
+// ===== COORDS =====
+const PHOTO = {x:223, y:338, w:516, h:633};
+const ERASE = {x:2189, y:0, w:188, h:28};
+
+
+// ===== UPLOAD =====
+function upload(){
+
+    let file = fileInput.files[0];
+    let pass = password.value;
+
+    let fd = new FormData();
+    fd.append("file", file);
+    fd.append("password", pass);
+
+    fetch("/process-aadhar",{method:"POST",body:fd})
+    .then(r=>r.json())
+    .then(d=>{
+
+        load(frontCanvas,fctx,d.front,true);
+        load(backCanvas,bctx,d.back,false);
+
+        area.style.display="block";
+    });
+}
+
+
+// ===== LOAD =====
+function load(canvas,ctx,src,isFront){
+
+    let img = new Image();
+    img.src = src;
+
+    img.onload = ()=>{
+        canvas.width = img.width;
+        canvas.height = img.height;
+        ctx.drawImage(img,0,0);
+
+        if(isFront) originalFront = ctx.getImageData(0,0,canvas.width,canvas.height);
+        else originalBack = ctx.getImageData(0,0,canvas.width,canvas.height);
+
+        apply(); // auto apply + erase
+    };
+}
+
+
+// ===== LEVELS =====
+function levels(v, black, gamma){
+
+    if(v > 240) return 255;
+
+    let norm = (v - black) / (255 - black);
+    norm = Math.max(0, Math.min(1, norm));
+
+    return Math.pow(norm, 1/gamma) * 255;
+}
+
+
+// ===== APPLY =====
+function apply(){
+
+    history.push({
+        f: fctx.getImageData(0,0,frontCanvas.width,frontCanvas.height),
+        b: bctx.getImageData(0,0,backCanvas.width,backCanvas.height)
+    });
+
+    redoStack = [];
+
+    let gB = +g_black.value;
+    let gG = +g_gamma.value;
+
+    let pW = +p_white.value;
+    let pG = +p_gamma.value;
+
+
+    // FRONT
+    let f = new ImageData(new Uint8ClampedArray(originalFront.data), originalFront.width);
+
+    for(let i=0;i<f.data.length;i+=4){
+
+        let x = (i/4)%f.width;
+        let y = Math.floor((i/4)/f.width);
+
+        let isPhoto = (x>PHOTO.x && x<PHOTO.x+PHOTO.w && y>PHOTO.y && y<PHOTO.y+PHOTO.h);
+
+        for(let c=0;c<3;c++){
+
+            let v = originalFront.data[i+c];
+
+            if(isPhoto){
+                let norm = v / pW;
+                norm = Math.pow(norm, 1/pG);
+                f.data[i+c] = Math.max(0,Math.min(255,norm*255));
+            }else{
+                f.data[i+c] = levels(v,gB,gG);
+            }
+        }
+    }
+
+    erase(f);
+
+
+    // BACK
+    let b = new ImageData(new Uint8ClampedArray(originalBack.data), originalBack.width);
+
+    for(let i=0;i<b.data.length;i+=4){
+        for(let c=0;c<3;c++){
+            let v = originalBack.data[i+c];
+            b.data[i+c] = levels(v,gB,gG);
+        }
+    }
+
+    erase(b);
+
+
+    fctx.putImageData(f,0,0);
+    bctx.putImageData(b,0,0);
+}
+
+
+// ===== ERASE =====
+function erase(img){
+    for(let y=ERASE.y;y<ERASE.y+ERASE.h;y++){
+        for(let x=ERASE.x;x<ERASE.x+ERASE.w;x++){
+            let i=(y*img.width+x)*4;
+            img.data[i]=255;
+            img.data[i+1]=255;
+            img.data[i+2]=255;
+        }
+    }
+}
+
+
+// ===== UNDO =====
+function undo(){
+    if(history.length===0) return;
+
+    let last = history.pop();
+    redoStack.push(last);
+
+    fctx.putImageData(last.f,0,0);
+    bctx.putImageData(last.b,0,0);
+}
+
+
+// ===== REDO =====
+function redo(){
+    if(redoStack.length===0) return;
+
+    let next = redoStack.pop();
+    history.push(next);
+
+    fctx.putImageData(next.f,0,0);
+    bctx.putImageData(next.b,0,0);
+}
+
+
+// ===== PRINT A4 =====
+function printA4(){
+
+    let w = 2480, h = 3508; // A4 300 DPI
+    let c = document.createElement("canvas");
+    c.width = w;
+    c.height = h;
+
+    let ctx = c.getContext("2d");
+
+    ctx.fillStyle="white";
+    ctx.fillRect(0,0,w,h);
+
+    ctx.drawImage(frontCanvas,200,300,800,500);
+    ctx.drawImage(backCanvas,1200,300,800,500);
+
+    let win = window.open("");
+    win.document.write(`<img src="${c.toDataURL()}">`);
+    win.print();
+}
+
+
+// ===== SLIDER EVENTS =====
+document.querySelectorAll("input[type=range]").forEach(el=>{
+    el.oninput = ()=>{
+        apply();
+    };
+});
+
+</script>
+
+</body>
+</html>
