@@ -1,12 +1,14 @@
-"""Shared helpers: PDF -> image, password handling, signature check, file IO."""
+"""Shared helpers: PDF -> image, password handling, file IO, runtime overrides."""
 
 import os
+import json
+import copy
 import uuid
 import cv2
 import numpy as np
 from pdf2image import convert_from_path
 
-from config import POPPLER_PATH, UPLOAD_DIR, OUTPUT_DIR
+from config import POPPLER_PATH, UPLOAD_DIR, OUTPUT_DIR, OVERRIDES_PATH
 
 
 def save_upload(file):
@@ -69,8 +71,8 @@ def write_jpg(path, img, quality=95):
 def safe_crop(img, y1, y2, x1, x2):
     """Clamp crop bounds to the image and return None if the result is empty."""
     h, w = img.shape[:2]
-    y1 = max(0, min(y1, h)); y2 = max(0, min(y2, h))
-    x1 = max(0, min(x1, w)); x2 = max(0, min(x2, w))
+    y1 = max(0, min(int(y1), h)); y2 = max(0, min(int(y2), h))
+    x1 = max(0, min(int(x1), w)); x2 = max(0, min(int(x2), w))
     if y2 <= y1 or x2 <= x1:
         return None
     return img[y1:y2, x1:x2].copy()
@@ -86,50 +88,51 @@ def public_url(uid, suffix):
 
 
 def apply_levels(img, alpha=1.0, beta=0):
-    """Linear contrast/brightness (used by RC tool, matches alpha=1.2/beta=-40)."""
+    """Linear contrast/brightness."""
     return cv2.convertScaleAbs(img, alpha=alpha, beta=beta)
 
 
-# ---------------------- Aadhar digital signature check ----------------------
+# ---------------------- Runtime overrides (Dev Mode) ----------------------
+#
+# Each tool's blueprint declares its EDITABLE constants at the TOP of its file.
+# Dev Mode in the browser writes JSON patches into overrides.json; this helper
+# deep-merges them on top of the in-code defaults whenever the tool runs.
 
-def check_pdf_signature(path, password=None):
-    """Returns dict: {signed: bool, signer: str|None, intact: bool|None, error: str|None}.
-    Best-effort: works on most UIDAI Aadhar PDFs.
-    """
+def _deep_merge(base, over):
+    out = copy.deepcopy(base)
+    if not isinstance(over, dict):
+        return out
+    for k, v in over.items():
+        if isinstance(v, dict) and isinstance(out.get(k), dict):
+            out[k] = _deep_merge(out[k], v)
+        else:
+            out[k] = copy.deepcopy(v)
+    return out
+
+
+def load_overrides():
+    if not os.path.exists(OVERRIDES_PATH):
+        return {}
     try:
-        from pyhanko.pdf_utils.reader import PdfFileReader
-        from pyhanko.pdf_utils.crypt import StandardSecurityHandler
+        with open(OVERRIDES_PATH, "r") as f:
+            return json.load(f)
+    except Exception:
+        return {}
 
-        with open(path, "rb") as f:
-            reader = PdfFileReader(f, strict=False)
-            if reader.encrypted and password:
-                try:
-                    reader.decrypt(password)
-                except Exception:
-                    pass
 
-            sigs = list(reader.embedded_signatures)
-            if not sigs:
-                return {"signed": False, "signer": None, "intact": None, "error": None}
+def save_overrides(data):
+    with open(OVERRIDES_PATH, "w") as f:
+        json.dump(data, f, indent=2)
 
-            sig = sigs[0]
-            signer = None
-            try:
-                cert = sig.signer_cert
-                if cert is not None:
-                    signer = cert.subject.human_friendly
-            except Exception:
-                signer = None
 
-            intact = None
-            try:
-                intact = bool(sig.compute_integrity_info().intact)
-            except Exception:
-                try:
-                    intact = bool(sig.summarise_integrity_info().intact)
-                except Exception:
-                    intact = None
+def merged(tool_key, defaults):
+    """Return defaults merged with the user's saved overrides for this tool."""
+    return _deep_merge(defaults, load_overrides().get(tool_key, {}))
 
-            return {"signed": True, "signer": signer, "intact": intact, "error": None}
-    except Exception as e:
-        return {"signed": False, "signer": None, "intact": None, "error": str(e)}
+
+def patch_overrides(tool_key, patch):
+    """Deep-merge `patch` into overrides.json[tool_key] and persist."""
+    data = load_overrides()
+    data[tool_key] = _deep_merge(data.get(tool_key, {}), patch or {})
+    save_overrides(data)
+    return data[tool_key]

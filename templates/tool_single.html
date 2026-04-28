@@ -22,15 +22,44 @@
   <button class="btn primary" onclick="upload()">⚙ Process</button>
   <button class="btn" onclick="undo()">↩ Undo</button>
   <button class="btn" onclick="redo()">↪ Redo</button>
+  <button class="btn" onclick="downloadImg()">⤓ Download</button>
   <button class="btn" onclick="printA4()">🖨 Print A4</button>
+  <button class="btn dev" onclick="toggleDev()">DEV</button>
 </div>
 
 <p id="status"></p>
-<div id="sig" style="text-align:center"></div>
+
+<div id="dropzone" class="dropzone">
+  Drop a PDF / image anywhere here
+</div>
+
+{% if allow_paste_overlay %}
+<div class="paste-bar">
+  <span class="paste-hint">
+    Open Aadhar in Adobe Reader → zoom to the digital-signature tick → screenshot it →
+    come back here and either <b>paste it (Ctrl + V)</b>, drop the image onto the page,
+    or pick the file with the button. Then drag / resize the box to align it
+    exactly over the existing signature mark.
+  </span>
+  <label class="btn">
+    Pick signature image
+    <input type="file" id="sig_file" accept="image/*" style="display:none">
+  </label>
+  <button class="btn" id="sig_remove" onclick="removeSig()" disabled>Remove</button>
+</div>
+{% endif %}
 
 <div id="area">
-  <div class="canvases">
-    <canvas id="img" class="single"></canvas>
+  <div class="canvases single-wrap">
+    <div class="canvas-stack">
+      <canvas id="img" class="single"></canvas>
+      {% if allow_paste_overlay %}
+      <div id="overlay_box" class="overlay-box" style="display:none">
+        <img id="overlay_img" alt="">
+        <span class="resize-handle"></span>
+      </div>
+      {% endif %}
+    </div>
   </div>
 
   <div class="controls-row">
@@ -68,13 +97,50 @@
   </div>
 </div>
 
+<!-- ====== DEV MODE PANEL ====== -->
+<div id="dev_panel" class="dev-panel" style="display:none">
+  <div class="dev-head">
+    DEV MODE — {{ tool_key }}
+    <button class="x" onclick="toggleDev()">×</button>
+  </div>
+  <div class="dev-body">
+    <div class="dev-section">
+      <div class="dev-title">Saved overrides (overrides.json)</div>
+      <pre id="dev_dump" class="dev-dump">…</pre>
+      <div class="dev-actions">
+        <button class="btn" onclick="devReload()">Reload</button>
+        <button class="btn" onclick="devReset()">Clear this tool's overrides</button>
+      </div>
+    </div>
+    <div class="dev-section">
+      <div class="dev-title">Save current sliders as default</div>
+      <button class="btn primary" onclick="devSaveLevels()">Save level defaults</button>
+      <span id="dev_save_msg" class="dev-msg"></span>
+    </div>
+    <div class="dev-section">
+      <div class="dev-title">Pick a region on the image (drag a rectangle)</div>
+      <div class="dev-actions">
+        <button class="btn" onclick="devPick('img')">Pick on IMAGE</button>
+      </div>
+      <pre id="dev_picked" class="dev-dump">(no selection yet)</pre>
+      <div class="dev-actions">
+        <button class="btn" onclick="devSavePhoto()">Save as photo region</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
   window.TOOL_CONFIG = {
+    tool_key:    {{ tool_key|tojson }},
     process_url: {{ process_url|tojson }},
-    photo_region: {{ photo_region|tojson }}
+    photo_region:{{ photo_region|tojson }},
+    print_scale: {{ print_scale|tojson }},
+    allow_paste_overlay: {{ allow_paste_overlay|default(false)|tojson }}
   };
 </script>
 <script src="{{ url_for('static', filename='js/print_a4.js') }}"></script>
+<script src="{{ url_for('static', filename='js/dev_mode.js') }}"></script>
 <script src="{{ url_for('static', filename='js/single_tool.js') }}"></script>
 
 </body>

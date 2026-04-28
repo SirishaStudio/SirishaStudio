@@ -1,12 +1,11 @@
-/* Dual-card tool runtime — used by Short Aadhar, PAN, Voter, RC, Senior.
- * Reads window.TOOL_CONFIG injected by the template.
- */
+/* Dual-card tool runtime — used by Short Aadhar, PAN, Voter, RC, DL, Senior. */
 
 (function(){
   const cfg = window.TOOL_CONFIG;
+  const $ = id => document.getElementById(id);
 
-  const frontCanvas = document.getElementById("front");
-  const backCanvas  = document.getElementById("back");
+  const frontCanvas = $("front");
+  const backCanvas  = $("back");
   const fctx = frontCanvas.getContext("2d");
   const bctx = backCanvas.getContext("2d");
 
@@ -16,10 +15,30 @@
   let redoStack = [];
   let backReady = false;
 
-  const PHOTO = cfg.photo_region || null;
+  // ----- Photo regions (canvas-pixel coords) -----
+  // Either single PHOTO from cfg.photo_region, OR multiple regions auto-scaled
+  // from cfg.photo_regions (72-DPI canvas spec). Computed after load().
+  let computedPhotoRegions = [];
   const ERASE = cfg.erase_region || null;
 
-  const $ = (id) => document.getElementById(id);
+  function computePhotoRegions(canvas){
+    computedPhotoRegions = [];
+    if(cfg.photo_region){
+      computedPhotoRegions.push(cfg.photo_region);
+    }
+    if(cfg.photo_regions){
+      const spec  = cfg.photo_regions.front_canvas_72dpi;
+      const list  = cfg.photo_regions.regions_72dpi || {};
+      const sx = canvas.width  / spec.w;
+      const sy = canvas.height / spec.h;
+      for(const k of Object.keys(list)){
+        const r = list[k];
+        computedPhotoRegions.push({
+          x: r.x * sx, y: r.y * sy, w: r.w * sx, h: r.h * sy
+        });
+      }
+    }
+  }
 
   function setStatus(msg, cls=""){
     const el = $("status");
@@ -28,17 +47,14 @@
   }
 
   // ---------- UPLOAD ----------
-  window.upload = function(){
-    const fileEl = $("file");
-    const file = fileEl.files[0];
+  function doUpload(file){
     if(!file){ setStatus("Pick a file first.", "err"); return; }
-
     const fd = new FormData();
     fd.append("file", file);
     if($("password")) fd.append("password", $("password").value);
+    if($("mode_select")) fd.append("mode", $("mode_select").value);
 
     setStatus("Processing…");
-
     fetch(cfg.process_url, { method:"POST", body:fd })
       .then(r => r.json())
       .then(d => {
@@ -50,15 +66,18 @@
         originalFront = null; originalBack = null;
         backReady = !!d.back;
 
-        // hide back canvas if missing (e.g. RC with single-page PDF)
-        backCanvas.style.display = backReady ? "" : "none";
-
+        backCanvas.parentElement.style.display = backReady ? "" : "none";
         load(frontCanvas, fctx, d.front, true);
         if(backReady) load(backCanvas, bctx, d.back, false);
 
         $("area").style.display = "block";
       })
       .catch(e => setStatus("Error: " + e, "err"));
+  }
+
+  window.upload = function(){
+    const f = $("file").files[0];
+    doUpload(f);
   };
 
   function load(canvas, ctx, src, isFront){
@@ -68,10 +87,15 @@
       canvas.height = img.height;
       ctx.drawImage(img, 0, 0);
       const data = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      if(isFront) originalFront = data; else originalBack = data;
+      if(isFront){
+        originalFront = data;
+        computePhotoRegions(canvas);
+      } else {
+        originalBack = data;
+      }
       maybeAutoApply();
     };
-    img.src = src;
+    img.src = src + "?t=" + Date.now();
   }
 
   function maybeAutoApply(){
@@ -89,12 +113,18 @@
   }
 
   function snapshot(){
-    const snap = {
+    history.push({
       f: fctx.getImageData(0, 0, frontCanvas.width, frontCanvas.height),
       b: backReady ? bctx.getImageData(0, 0, backCanvas.width, backCanvas.height) : null
-    };
-    history.push(snap);
+    });
     if(history.length > 30) history.shift();
+  }
+
+  function inAnyPhoto(x, y){
+    for(const r of computedPhotoRegions){
+      if(x > r.x && x < r.x + r.w && y > r.y && y < r.y + r.h) return true;
+    }
+    return false;
   }
 
   function apply(initial = false){
@@ -114,14 +144,14 @@
     // FRONT
     const f  = new ImageData(new Uint8ClampedArray(originalFront.data), originalFront.width);
     const fw = f.width;
+    const hasPhoto = computedPhotoRegions.length > 0;
     for(let i = 0; i < f.data.length; i += 4){
       let isPhoto = false;
-      if(PHOTO){
+      if(hasPhoto){
         const px = i >> 2;
         const x  = px % fw;
         const y  = (px / fw) | 0;
-        isPhoto = (x > PHOTO.x && x < PHOTO.x + PHOTO.w &&
-                   y > PHOTO.y && y < PHOTO.y + PHOTO.h);
+        isPhoto = inAnyPhoto(x, y);
       }
       for(let c = 0; c < 3; c++){
         const v = originalFront.data[i + c];
@@ -184,18 +214,63 @@
     if(backReady && next.b) bctx.putImageData(next.b, 0, 0);
   };
 
+  // ---------- DOWNLOAD ----------
+  function fname(side){
+    return cfg.tool_key + "_" + side + "_" + new Date().toISOString().slice(0,19).replace(/[:T-]/g,"") + ".jpg";
+  }
+  window.downloadFront = function(){
+    if(!originalFront){ setStatus("Process a file first.", "err"); return; }
+    window.downloadCanvas(frontCanvas, fname("front"));
+  };
+  window.downloadBack = function(){
+    if(!backReady){ setStatus("No back image.", "err"); return; }
+    window.downloadCanvas(backCanvas, fname("back"));
+  };
+
   // ---------- PRINT ----------
   window.printA4 = function(){
     if(!originalFront){ setStatus("Process a file first.", "err"); return; }
-    if(backReady){
-      window.printDualA4(frontCanvas, backCanvas);
-    } else {
-      window.printSingleA4(frontCanvas);
+    const opts = { scale: cfg.print_scale };
+    if(cfg.print_mode === "corner"){
+      if(backReady) window.printCornerDualA4(frontCanvas, backCanvas, opts);
+      else          window.printCornerA4(frontCanvas, opts);
+      return;
     }
+    if(backReady) window.printDualA4(frontCanvas, backCanvas, opts);
+    else          window.printSingleA4(frontCanvas, opts);
   };
+
+  // ---------- DRAG & DROP (whole page) ----------
+  ["dragenter","dragover"].forEach(ev =>
+    document.addEventListener(ev, e => {
+      e.preventDefault(); $("dropzone").classList.add("drop-show");
+    })
+  );
+  ["dragleave","drop"].forEach(ev =>
+    document.addEventListener(ev, e => {
+      if(ev === "dragleave" && e.target !== document.documentElement) return;
+      $("dropzone").classList.remove("drop-show");
+    })
+  );
+  document.addEventListener("drop", e => {
+    e.preventDefault();
+    const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if(f){ $("file").files = e.dataTransfer.files; doUpload(f); }
+  });
 
   // ---------- SLIDER EVENTS ----------
   document.querySelectorAll("input[type=range]").forEach(el => {
     el.oninput = () => apply();
   });
+
+  // ---------- DEV API hookup ----------
+  window.DEV_API = {
+    canvases: { front: frontCanvas, back: backCanvas },
+    getLevels(){
+      const o = { g_black:+$("g_black").value, g_gamma:+$("g_gamma").value };
+      if($("p_white")) o.p_white = +$("p_white").value;
+      if($("p_gamma")) o.p_gamma = +$("p_gamma").value;
+      return o;
+    }
+  };
 })();

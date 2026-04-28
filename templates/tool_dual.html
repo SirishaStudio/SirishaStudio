@@ -19,18 +19,40 @@
   {% if needs_password %}
     <input type="password" id="password" placeholder="PDF Password (auto if filename matches)">
   {% endif %}
+
+  {% if modes %}
+    <select id="mode_select" class="mode-select">
+      {% for m in modes %}
+        <option value="{{ m.key }}">{{ m.label }}</option>
+      {% endfor %}
+    </select>
+  {% endif %}
+
   <button class="btn primary" onclick="upload()">⚙ Process</button>
   <button class="btn" onclick="undo()">↩ Undo</button>
   <button class="btn" onclick="redo()">↪ Redo</button>
+  <button class="btn" onclick="downloadFront()">⤓ Front</button>
+  <button class="btn" onclick="downloadBack()">⤓ Back</button>
   <button class="btn" onclick="printA4()">🖨 Print A4</button>
+  <button class="btn dev" onclick="toggleDev()">DEV</button>
 </div>
 
 <p id="status"></p>
 
+<div id="dropzone" class="dropzone">
+  Drop a PDF / image anywhere here
+</div>
+
 <div id="area">
   <div class="canvases">
-    <canvas id="front"></canvas>
-    <canvas id="back"></canvas>
+    <div class="canvas-wrap">
+      <canvas id="front"></canvas>
+      <div class="card-label">FRONT</div>
+    </div>
+    <div class="canvas-wrap">
+      <canvas id="back"></canvas>
+      <div class="card-label">BACK</div>
+    </div>
   </div>
 
   <div class="controls-row">
@@ -49,7 +71,7 @@
       </div>
     </div>
 
-    {% if photo_region %}
+    {% if photo_region or photo_regions %}
     <div class="controls">
       <div class="title">PHOTO · FRONT ONLY</div>
       <div class="row">
@@ -68,14 +90,61 @@
   </div>
 </div>
 
+<!-- ====== DEV MODE PANEL ====== -->
+<div id="dev_panel" class="dev-panel" style="display:none">
+  <div class="dev-head">
+    DEV MODE — {{ tool_key }}
+    <button class="x" onclick="toggleDev()">×</button>
+  </div>
+  <div class="dev-body">
+    <div class="dev-section">
+      <div class="dev-title">Saved overrides (overrides.json)</div>
+      <pre id="dev_dump" class="dev-dump">…</pre>
+      <div class="dev-actions">
+        <button class="btn" onclick="devReload()">Reload</button>
+        <button class="btn" onclick="devReset()">Clear this tool's overrides</button>
+      </div>
+    </div>
+
+    <div class="dev-section">
+      <div class="dev-title">Save current sliders as default</div>
+      <button class="btn primary" onclick="devSaveLevels()">Save level defaults</button>
+      <span id="dev_save_msg" class="dev-msg"></span>
+    </div>
+
+    <div class="dev-section">
+      <div class="dev-title">Pick a region on FRONT (drag a rectangle)</div>
+      <p class="dev-hint">
+        Click <b>Pick on FRONT</b> then drag a rectangle on the front canvas above.
+        You'll get the coords in canvas-pixel space — copy them, send them to the
+        agent, or save as photo region for this tool.
+      </p>
+      <div class="dev-actions">
+        <button class="btn" onclick="devPick('front')">Pick on FRONT</button>
+        <button class="btn" onclick="devPick('back')">Pick on BACK</button>
+      </div>
+      <pre id="dev_picked" class="dev-dump">(no selection yet)</pre>
+      <div class="dev-actions">
+        <button class="btn" onclick="devSavePhoto()">Save as photo region</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
   window.TOOL_CONFIG = {
-    process_url: {{ process_url|tojson }},
-    photo_region: {{ photo_region|tojson }},
-    erase_region: {{ erase_region|tojson }}
+    tool_key:      {{ tool_key|tojson }},
+    process_url:   {{ process_url|tojson }},
+    photo_region:  {{ photo_region|tojson }},
+    photo_regions: {{ photo_regions|tojson }},
+    erase_region:  {{ erase_region|tojson }},
+    print_scale:   {{ print_scale|tojson }},
+    print_mode:    {{ print_mode|tojson }},
+    has_modes:     {{ (modes is not none)|tojson }}
   };
 </script>
 <script src="{{ url_for('static', filename='js/print_a4.js') }}"></script>
+<script src="{{ url_for('static', filename='js/dev_mode.js') }}"></script>
 <script src="{{ url_for('static', filename='js/dual_tool.js') }}"></script>
 
 </body>

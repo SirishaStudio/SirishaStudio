@@ -1,20 +1,32 @@
-/* Single-image tool runtime — used by Long Aadhar.
- * Reads window.TOOL_CONFIG injected by the template.
+/* Single-image tool runtime — used by Long Aadhar (full PDF page).
+ * Adds: drag&drop file upload, paste/drop signature image overlay,
+ * download (with overlay baked in), Dev Mode hookup.
  */
 
 (function(){
   const cfg = window.TOOL_CONFIG;
+  const $ = id => document.getElementById(id);
 
-  const canvas = document.getElementById("img");
+  const canvas = $("img");
   const ctx = canvas.getContext("2d");
+  const PHOTO = cfg.photo_region || null;
 
   let original = null;
   let history   = [];
   let redoStack = [];
 
-  const PHOTO = cfg.photo_region || null;
-
-  const $ = (id) => document.getElementById(id);
+  // Signature overlay state (positioned in CSS-pixel coords on the canvas)
+  // We render it as a positioned <div><img></div> over the canvas during edit,
+  // then bake into a flattened canvas for Print / Download.
+  const overlay = {
+    img: null,            // HTMLImageElement
+    visible: false,
+    cx: 50, cy: 50,       // CSS pixels relative to canvas
+    cw: 120, ch: 120,
+    dragging: false,
+    resizing: false,
+    dragOff: {x:0, y:0}
+  };
 
   function setStatus(msg, cls=""){
     const el = $("status");
@@ -22,38 +34,14 @@
     el.className = cls;
   }
 
-  function showSignature(info){
-    const box = $("sig");
-    if(!info){ box.innerHTML = ""; return; }
-    if(info.error){
-      box.innerHTML = `<span class="sig-badge"><span class="dot"></span>Signature check unavailable</span>`;
-      return;
-    }
-    if(!info.signed){
-      box.innerHTML = `<span class="sig-badge bad"><span class="dot"></span>Not digitally signed</span>`;
-      return;
-    }
-    const cls = info.intact === true ? "ok" : (info.intact === false ? "bad" : "");
-    const label = info.intact === true ? "Signature intact"
-                : info.intact === false ? "Signature broken"
-                : "Signed";
-    const signer = info.signer ? ` <span class="signer">· ${info.signer}</span>` : "";
-    box.innerHTML = `<span class="sig-badge ${cls}"><span class="dot"></span>${label}${signer}</span>`;
-  }
-
   // ---------- UPLOAD ----------
-  window.upload = function(){
-    const fileEl = $("file");
-    const file = fileEl.files[0];
+  function doUpload(file){
     if(!file){ setStatus("Pick a file first.", "err"); return; }
-
     const fd = new FormData();
     fd.append("file", file);
     if($("password")) fd.append("password", $("password").value);
 
     setStatus("Processing…");
-    showSignature(null);
-
     fetch(cfg.process_url, { method:"POST", body:fd })
       .then(r => r.json())
       .then(d => {
@@ -61,15 +49,14 @@
         if(d.error){ setStatus(d.error, "err"); return; }
 
         setStatus("");
-        showSignature(d.signature);
         history = []; redoStack = [];
         original = null;
-
         load(d.image);
         $("area").style.display = "block";
       })
       .catch(e => setStatus("Error: " + e, "err"));
-  };
+  }
+  window.upload = function(){ doUpload($("file").files[0]); };
 
   function load(src){
     const img = new Image();
@@ -79,8 +66,12 @@
       ctx.drawImage(img, 0, 0);
       original = ctx.getImageData(0, 0, canvas.width, canvas.height);
       apply(true);
+      // Re-position overlay default near photo region after canvas sized
+      if(cfg.allow_paste_overlay){
+        positionOverlayDefault();
+      }
     };
-    img.src = src;
+    img.src = src + "?t=" + Date.now();
   }
 
   function levels(v, black, gamma){
@@ -140,19 +131,178 @@
     redoStack.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
     ctx.putImageData(history.pop(), 0, 0);
   };
-
   window.redo = function(){
     if(redoStack.length === 0) return;
     history.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
     ctx.putImageData(redoStack.pop(), 0, 0);
   };
 
-  window.printA4 = function(){
+  // ---------- DOWNLOAD (with overlay baked) ----------
+  function flattenedCanvas(){
+    if(!overlay.visible || !overlay.img) return canvas;
+    const c2 = document.createElement("canvas");
+    c2.width = canvas.width; c2.height = canvas.height;
+    const c2x = c2.getContext("2d");
+    c2x.drawImage(canvas, 0, 0);
+    // Convert overlay CSS rect -> canvas-pixel rect
+    const sx = canvas.width  / canvas.clientWidth;
+    const sy = canvas.height / canvas.clientHeight;
+    c2x.drawImage(overlay.img,
+      overlay.cx * sx, overlay.cy * sy,
+      overlay.cw * sx, overlay.ch * sy);
+    return c2;
+  }
+  window.downloadImg = function(){
     if(!original){ setStatus("Process a file first.", "err"); return; }
-    window.printSingleA4(canvas);
+    const fname = cfg.tool_key + "_" + new Date().toISOString().slice(0,19).replace(/[:T-]/g,"") + ".jpg";
+    window.downloadCanvas(flattenedCanvas(), fname);
   };
 
+  // ---------- PRINT (with overlay baked) ----------
+  window.printA4 = function(){
+    if(!original){ setStatus("Process a file first.", "err"); return; }
+    window.printSingleA4(flattenedCanvas(), { scale: cfg.print_scale });
+  };
+
+  // ---------- PASTE / DROP signature overlay ----------
+  if(cfg.allow_paste_overlay){
+    const box = $("overlay_box");
+    const oimg = $("overlay_img");
+    const sigPicker = $("sig_file");
+    const removeBtn = $("sig_remove");
+
+    function setOverlay(imgEl){
+      overlay.img = imgEl;
+      overlay.visible = true;
+      oimg.src = imgEl.src;
+      box.style.display = "block";
+      removeBtn.disabled = false;
+      placeOverlay();
+    }
+
+    window.removeSig = function(){
+      overlay.img = null; overlay.visible = false;
+      box.style.display = "none";
+      removeBtn.disabled = true;
+    };
+
+    function loadFromBlob(blob){
+      const url = URL.createObjectURL(blob);
+      const img = new Image();
+      img.onload = () => setOverlay(img);
+      img.src = url;
+    }
+
+    sigPicker.addEventListener("change", () => {
+      const f = sigPicker.files[0];
+      if(f) loadFromBlob(f);
+    });
+
+    // PASTE from clipboard (Ctrl + V anywhere on the page)
+    document.addEventListener("paste", e => {
+      const items = (e.clipboardData || {}).items || [];
+      for(const it of items){
+        if(it.type && it.type.indexOf("image/") === 0){
+          const blob = it.getAsFile();
+          if(blob) loadFromBlob(blob);
+          e.preventDefault();
+          break;
+        }
+      }
+    });
+
+    // Drag-drop image OR file
+    document.addEventListener("drop", e => {
+      const dt = e.dataTransfer;
+      if(!dt) return;
+      const f = dt.files && dt.files[0];
+      if(!f) return;
+      if(f.type && f.type.indexOf("image/") === 0 && original){
+        // image after a PDF is loaded -> treat as signature paste
+        loadFromBlob(f); e.preventDefault();
+      }
+    });
+
+    // ---- drag & resize the overlay box ----
+    function placeOverlay(){
+      box.style.left   = overlay.cx + "px";
+      box.style.top    = overlay.cy + "px";
+      box.style.width  = overlay.cw + "px";
+      box.style.height = overlay.ch + "px";
+    }
+    function positionOverlayDefault(){
+      // Put it roughly in the lower-right area where Aadhar tick lives
+      overlay.cx = Math.round(canvas.clientWidth  * 0.55);
+      overlay.cy = Math.round(canvas.clientHeight * 0.05);
+      overlay.cw = 120; overlay.ch = 120;
+      placeOverlay();
+    }
+
+    box.addEventListener("mousedown", ev => {
+      if(ev.target.classList.contains("resize-handle")){
+        overlay.resizing = true;
+      } else {
+        overlay.dragging = true;
+        overlay.dragOff.x = ev.clientX - overlay.cx;
+        overlay.dragOff.y = ev.clientY - overlay.cy;
+      }
+      ev.preventDefault();
+    });
+    document.addEventListener("mousemove", ev => {
+      if(overlay.dragging){
+        overlay.cx = ev.clientX - overlay.dragOff.x;
+        overlay.cy = ev.clientY - overlay.dragOff.y;
+        placeOverlay();
+      } else if(overlay.resizing){
+        const r = box.getBoundingClientRect();
+        overlay.cw = Math.max(20, ev.clientX - r.left);
+        overlay.ch = Math.max(20, ev.clientY - r.top);
+        placeOverlay();
+      }
+    });
+    document.addEventListener("mouseup", () => {
+      overlay.dragging = overlay.resizing = false;
+    });
+  }
+
+  // ---------- DRAG & DROP file (PDF/image) ----------
+  ["dragenter","dragover"].forEach(ev =>
+    document.addEventListener(ev, e => {
+      e.preventDefault();
+      if(!original) $("dropzone").classList.add("drop-show");
+    })
+  );
+  ["dragleave","drop"].forEach(ev =>
+    document.addEventListener(ev, e => {
+      $("dropzone").classList.remove("drop-show");
+    })
+  );
+  document.addEventListener("drop", e => {
+    const dt = e.dataTransfer;
+    const f = dt && dt.files && dt.files[0];
+    if(!f) return;
+    // If no image loaded yet -> treat as file upload
+    if(!original){
+      e.preventDefault();
+      $("file").files = dt.files;
+      doUpload(f);
+    }
+    // else: handled by overlay-paste branch above
+  });
+
+  // ---------- SLIDERS ----------
   document.querySelectorAll("input[type=range]").forEach(el => {
     el.oninput = () => apply();
   });
+
+  // ---------- DEV API hookup ----------
+  window.DEV_API = {
+    canvases: { img: canvas },
+    getLevels(){
+      const o = { g_black:+$("g_black").value, g_gamma:+$("g_gamma").value };
+      if($("p_white")) o.p_white = +$("p_white").value;
+      if($("p_gamma")) o.p_gamma = +$("p_gamma").value;
+      return o;
+    }
+  };
 })();

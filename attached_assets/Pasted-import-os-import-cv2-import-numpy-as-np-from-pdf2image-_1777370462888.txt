@@ -1,0 +1,123 @@
+import os
+import cv2
+import numpy as np
+from pdf2image import convert_from_path
+import shutil
+import re
+import sys
+import time
+import threading
+import gc
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+POPPLER_PATH = r"C:\Users\rao\Documents\work\poppler-25.12.0\Library\bin"
+OUTPUT_DIR = os.path.join(BASE_DIR, "output")
+TEMP_DIR = os.path.join(BASE_DIR, "temp")
+
+os.makedirs(OUTPUT_DIR, exist_ok=True)
+os.makedirs(TEMP_DIR, exist_ok=True)
+
+ORIGINAL_DPI = 700
+TARGET_DPI = 500 
+SCALE = TARGET_DPI / ORIGINAL_DPI
+
+F_X, F_Y = int(1692 * SCALE), int(1123 * SCALE)
+F_W, F_H = int(2328 * SCALE), int(1465 * SCALE)
+B_X, B_Y = int(1696 * SCALE), int(3066 * SCALE)
+B_W, B_H = int(2328 * SCALE), int(1465 * SCALE)
+
+class Loader:
+    def __init__(self, desc="Processing..."):
+        self.desc = desc
+        self.done = False
+
+    def animate(self):
+        while not self.done:
+            for c in ['|', '/', '-', '\\']:
+                if self.done: break
+                sys.stdout.write(f'\r{self.desc} {c} ')
+                sys.stdout.flush()
+                time.sleep(0.1)
+
+    def start(self):
+        self.thread = threading.Thread(target=self.animate)
+        self.thread.start()
+
+    def stop(self):
+        self.done = True
+        if hasattr(self, 'thread'):
+            self.thread.join()
+        sys.stdout.write('\r' + ' ' * (len(self.desc) + 10) + '\r')
+
+def get_next_index(directory):
+    existing_files = os.listdir(directory)
+    max_num = 0
+    for f in existing_files:
+        match = re.match(r'^(\d+)', f)
+        if match:
+            num = int(match.group(1))
+            if num > max_num: max_num = num
+    return max_num + 1
+
+def process_sc_files():
+    files = [f for f in os.listdir(BASE_DIR) if f.lower().endswith('.pdf')]
+    if not files:
+        print("[-] No PDF files found in current directory.")
+        return
+
+    card_index = get_next_index(OUTPUT_DIR)
+
+    for filename in files:
+        input_path = os.path.join(BASE_DIR, filename)
+        potential_pw = os.path.splitext(filename)[0] 
+        
+        loader = Loader(f"[*] Processing {filename}")
+        loader.start()
+
+        try:
+            try:
+                pages = convert_from_path(input_path, dpi=TARGET_DPI, 
+                                          poppler_path=POPPLER_PATH, 
+                                          userpw=potential_pw,
+                                          first_page=1, last_page=1)
+            except:
+                loader.stop()
+                print(f"\n[!] Password required for: {filename}")
+                user_pw = input(f" Enter password: ")
+                loader.start()
+                pages = convert_from_path(input_path, dpi=TARGET_DPI, 
+                                          poppler_path=POPPLER_PATH, 
+                                          userpw=user_pw,
+                                          first_page=1, last_page=1)
+            
+            if not pages:
+                raise Exception("Could not load PDF page.")
+
+            pdf_page = pages[0]
+
+            front_crop = pdf_page.crop((F_X, F_Y, F_X + F_W, F_Y + F_H))
+            front_img = cv2.cvtColor(np.array(front_crop), cv2.COLOR_RGB2BGR)
+
+            back_crop = pdf_page.crop((B_X, B_Y, B_X + B_W, B_Y + B_H))
+            back_img = cv2.cvtColor(np.array(back_crop), cv2.COLOR_RGB2BGR)
+
+            cv2.imwrite(os.path.join(OUTPUT_DIR, f"{card_index}f.jpg"), front_img, [int(cv2.IMWRITE_JPEG_QUALITY), 98])
+            cv2.imwrite(os.path.join(OUTPUT_DIR, f"{card_index}b.jpg"), back_img, [int(cv2.IMWRITE_JPEG_QUALITY), 98])
+
+            loader.stop()
+            print(f"[+] Saved Card {card_index}: {filename}")
+            
+            del pages, front_img, back_img, front_crop, back_crop
+            gc.collect()
+
+            shutil.move(input_path, os.path.join(TEMP_DIR, filename))
+            card_index += 1
+
+        except Exception as e:
+            loader.stop()
+            print(f"[x] Error on {filename}: {e}")
+
+if __name__ == "__main__":
+    print("=== SIRISHA STUDIO SENIOR CITIZEN PROCESSOR (AUTO-PATH) ===")
+    process_sc_files()
+    print(f"\n[!] All tasks complete.")
