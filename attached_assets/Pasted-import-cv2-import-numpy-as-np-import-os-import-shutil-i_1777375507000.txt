@@ -1,0 +1,128 @@
+import cv2
+import numpy as np
+import os
+import shutil
+import re
+import gc
+from pathlib import Path
+from PIL import Image
+import pillow_heif
+import fitz # PyMuPDF
+
+# Enable HEIC/HEIF support
+pillow_heif.register_heif_opener()
+
+class StudioProProcessor:
+    def __init__(self):
+        # Detect directory script is running in
+        self.base_path = Path(__file__).parent if "__file__" in locals() else Path.cwd()
+        self.backup_path = self.base_path / "originals"
+        self.backup_path.mkdir(exist_ok=True)
+        self.valid_exts = {'.jpg', '.jpeg', '.png', '.heic', '.heif', '.webp', '.pdf'}
+
+    def get_info(self, filename):
+        name, ext = os.path.splitext(filename)
+        match = re.search(r'^(.*)_e(\d+)$', name)
+        if match:
+            return match.group(1), int(match.group(2)), ext
+        return name, 0, ext
+
+    def adjust_lighting(self, img, mode):
+        if img.dtype != np.uint8:
+            img = cv2.convertScaleAbs(img)
+
+        # MODE 1: ULTRA-WHITE (Scan-to-Print)
+        if mode == '1':
+            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            # Gamma correction to brighten paper background
+            invGamma = 1.0 / 1.8 
+            table = np.array([((i / 255.0) ** invGamma) * 255 for i in np.arange(0, 256)]).astype("uint8")
+            gray = cv2.LUT(gray, table)
+            # Adaptive thresholding to isolate crisp text from white background
+            dst = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 15, 12)
+            return cv2.cvtColor(dst, cv2.COLOR_GRAY2BGR)
+
+        # MODE 2: DARKMODE FIX (Invert for Printer)
+        if mode == '2':
+            lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
+            l_channel, _, _ = cv2.split(lab)
+            # Auto-detect if image is dark enough to need inversion
+            if np.mean(l_channel) < 100:
+                inverted = cv2.bitwise_not(img)
+                return cv2.convertScaleAbs(inverted, alpha=1.2, beta=-10)
+            return img
+        
+        return img
+
+    def undo(self):
+        files = [f for f in self.base_path.iterdir() if f.suffix.lower() in self.valid_exts]
+        undone_count = 0
+        for file_path in files:
+            base, version, ext = self.get_info(file_path.name)
+            if version == 0: continue
+            
+            prev_v = version - 1
+            search = f"{base}_e{prev_v}{ext}" if prev_v > 0 else f"{base}{ext}"
+            backup_source = self.backup_path / search
+            
+            if backup_source.exists():
+                file_path.unlink()
+                shutil.copy(str(backup_source), str(self.base_path / search))
+                undone_count += 1
+        print(f"⏪ Reverted {undone_count} files.")
+        gc.collect()
+
+    def run(self, mode):
+        files = [f for f in self.base_path.iterdir() if f.suffix.lower() in self.valid_exts]
+        for file_path in files:
+            # Skip the script file itself
+            if file_path.name == Path(__file__).name if "__file__" in locals() else False:
+                continue
+            
+            try:
+                shutil.copy(str(file_path), str(self.backup_path / file_path.name))
+                base, version, ext = self.get_info(file_path.name)
+                new_name = f"{base}_e{version + 1}{ext}"
+
+                if ext.lower() == '.pdf':
+                    doc = fitz.open(file_path)
+                    new_pdf = fitz.open()
+                    for i in range(len(doc)):
+                        page = doc[i]
+                        pix = page.get_pixmap(dpi=200)
+                        img_data = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.h, pix.w, 3)
+                        cv_img = cv2.cvtColor(img_data, cv2.COLOR_RGB2BGR)
+                        res = self.adjust_lighting(cv_img, mode)
+                        _, img_encoded = cv2.imencode(".jpg", res, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
+                        new_page = new_pdf.new_page(width=page.rect.width, height=page.rect.height)
+                        new_page.insert_image(new_page.rect, stream=img_encoded.tobytes())
+                    new_pdf.save(str(self.base_path / new_name))
+                    new_pdf.close()
+                    doc.close()
+                else:
+                    with Image.open(file_path) as pil_img:
+                        cv_img = cv2.cvtColor(np.array(pil_img.convert('RGB')), cv2.COLOR_RGB2BGR)
+                        enhanced = self.adjust_lighting(cv_img, mode)
+                        cv2.imwrite(str(self.base_path / new_name), enhanced)
+                
+                file_path.unlink()
+                print(f"✅ Processed: {new_name}")
+                gc.collect()
+            except Exception as e:
+                print(f"❌ Error on {file_path.name}: {e}")
+
+if __name__ == '__main__':
+    proc = StudioProProcessor()
+    while True:
+        print('\n--- STUDIO PRO (CLEAN) ---')
+        print('1. ULTRA-WHITE (Scan-to-Print)')
+        print('2. DARKMODE FIX (Invert)')
+        print('3. UNDO')
+        print('4. EXIT')
+        c = input('Choice: ')
+        if c in ['1', '2']:
+            proc.run(c)
+        elif c == '3':
+            proc.undo()
+        elif c == '4':
+            break

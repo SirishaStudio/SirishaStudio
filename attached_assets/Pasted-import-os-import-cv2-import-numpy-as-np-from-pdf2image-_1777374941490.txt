@@ -1,0 +1,87 @@
+import os
+import cv2
+import numpy as np
+from pdf2image import convert_from_path
+import shutil
+import re
+
+# Configuration
+BASE_DIR = r"C:\Users\rao\Desktop\SIRISHA STUDIO\0_PAN"
+POPPLER_PATH = r"C:\Users\rao\Documents\work\poppler-25.12.0\Library\bin"
+OUTPUT_DIR = os.path.join(BASE_DIR, "output")
+TEMP_DIR = os.path.join(BASE_DIR, "temp")
+
+# Ensure output and temp directories exist
+os.makedirs(OUTPUT_DIR, exist_ok=True)
+os.makedirs(TEMP_DIR, exist_ok=True)
+
+def get_next_index(directory):
+    """Checks the output folder and finds the highest existing number."""
+    existing_files = os.listdir(directory)
+    max_num = 0
+    for f in existing_files:
+        match = re.match(r'^(\d+)', f)
+        if match:
+            num = int(match.group(1))
+            if num > max_num:
+                max_num = num
+    return max_num + 1
+
+def process_pan_files():
+    # Filter: Only PDFs
+    files = [f for f in os.listdir(BASE_DIR) 
+             if os.path.isfile(os.path.join(BASE_DIR, f)) 
+             and f.lower().endswith('.pdf') 
+             and f.lower() != "pancard.py"]
+
+    if not files:
+        print("No PDF files found in the directory.")
+        return
+
+    card_index = get_next_index(OUTPUT_DIR)
+    print(f"Resuming from index: {card_index}")
+
+    password = input("Enter PDF password (DOB in DDMMYYYY): ")
+
+    for filename in files:
+        input_path = os.path.join(BASE_DIR, filename)
+        print(f"Processing: {filename} at 700 DPI...")
+
+        try:
+            # 1. Convert PDF to Image at 700 DPI
+            pages = convert_from_path(input_path, dpi=700, poppler_path=POPPLER_PATH, userpw=password)
+            if not pages:
+                continue
+            
+            full_page = np.array(pages[0])
+            full_page = cv2.cvtColor(full_page, cv2.COLOR_RGB2BGR)
+
+            # 2. PAN COORDINATES SCALED FOR 700 DPI (Original x 2.333)
+            # FRONT SIDE (Original: 2714:3326, 284:1260)
+            front_card = full_page[6332:7760, 662:2940] 
+            
+            # BACK SIDE (Original: 2712:3327, 1281:2261)
+            back_card = full_page[6328:7763, 2989:5275]
+
+            # 3. Save with SERIAL FORMAT
+            front_name = f"{card_index}f.jpg"
+            back_name = f"{card_index}b.jpg"
+            
+            # Save with high quality (95) to preserve the 700 DPI detail
+            cv2.imwrite(os.path.join(OUTPUT_DIR, front_name), front_card, [int(cv2.IMWRITE_JPEG_QUALITY), 95])
+            cv2.imwrite(os.path.join(OUTPUT_DIR, back_name), back_card, [int(cv2.IMWRITE_JPEG_QUALITY), 95])
+            
+            print(f"Saved High-Res: {front_name} and {back_name}")
+            
+            # 4. Move original to temp
+            shutil.move(input_path, os.path.join(TEMP_DIR, filename))
+            
+            card_index += 1
+
+        except Exception as e:
+            print(f"Failed to process {filename}: {e}")
+
+if __name__ == "__main__":
+    process_pan_files()
+    print(f"\nTask complete.")
+    input("Press Enter to close this window...")

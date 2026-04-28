@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Enhance — Studio</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+
+<div class="topbar">
+  <a class="back-link" href="/">← All tools</a>
+  <span class="brand">SIRISHA STUDIO</span>
+</div>
+
+<h2>Enhance</h2>
+
+<div class="upload-bar">
+  <input type="file" id="files" multiple
+         accept=".jpg,.jpeg,.png,.webp,.heic,.heif,.avif,.bmp,.gif,.tif,.tiff">
+  <button class="btn primary" onclick="uploadFiles()">⬆ Add images</button>
+  <span style="color:var(--muted);font-size:11px">
+    Click to select. Ctrl+Click toggles. Shift+Click for range. Ctrl+I inverts.
+  </span>
+</div>
+
+<div class="enh-actions">
+  <button class="btn primary" onclick="apply('lighten')">☀ Lighten</button>
+  <button class="btn primary" onclick="apply('darken')">🌙 Darken</button>
+  <button class="btn primary" onclick="apply('whiten')">✨ Whiten</button>
+  <button class="btn primary" onclick="apply('dark_fix')">🔆 Dark-mode FIX</button>
+  <button class="btn" onclick="undo()">↶ Undo</button>
+  <button class="btn" onclick="selectAll()">Select all</button>
+  <button class="btn" onclick="selectNone()">Select none</button>
+  <button class="btn" onclick="invertSel()">Invert (Ctrl+I)</button>
+  <button class="btn" onclick="toggleAdv()">⚙ Advanced</button>
+  <button class="btn" onclick="downloadZip()">⤓ ZIP selected</button>
+  <button class="btn" onclick="printAllPdf()">🖨 Print as PDF</button>
+</div>
+
+<div id="adv" class="enh-adv" style="display:none">
+  <div class="row">
+    <label>Hue</label>
+    <input type="range" id="hue_v" min="-180" max="180" value="0">
+    <span class="val" id="hue_lbl">0</span>
+    <button class="btn" onclick="apply('hue', { deg: +$('hue_v').value })">Apply hue</button>
+  </div>
+  <div class="row">
+    <label>Saturation</label>
+    <input type="range" id="sat_v" min="0" max="2" step="0.05" value="1">
+    <span class="val" id="sat_lbl">1.00</span>
+    <button class="btn" onclick="apply('sat', { mul: +$('sat_v').value })">Apply sat</button>
+  </div>
+  <div class="row">
+    <label>Gamma</label>
+    <input type="range" id="gam_v" min="0.2" max="3" step="0.05" value="1">
+    <span class="val" id="gam_lbl">1.00</span>
+    <button class="btn" onclick="apply('gamma', { g: +$('gam_v').value })">Apply gamma</button>
+  </div>
+  <div class="row">
+    <label>Lighten amount</label>
+    <input type="range" id="lit_v" min="5" max="80" step="5" value="30">
+    <span class="val" id="lit_lbl">30</span>
+    <button class="btn" onclick="apply('lighten', { amount: +$('lit_v').value })">Custom lighten</button>
+  </div>
+</div>
+
+<p id="status"></p>
+<div id="grid" class="enh-grid"></div>
+<div id="dropzone" class="dropzone">Drop images anywhere here</div>
+
+<script>
+  const $ = id => document.getElementById(id);
+  let items = [];        // [{uid, name, thumb, full}]
+  const sel = new Set(); // selected UIDs
+  let lastClicked = -1;
+
+  function setStatus(m, c=""){ $("status").innerText = m; $("status").className = c; }
+
+  function render(){
+    const html = items.map((it, i) => {
+      const isSel = sel.has(it.uid);
+      return `<div class="enh-cell ${isSel?'sel':''}" data-i="${i}" data-uid="${it.uid}">
+        <img src="${it.thumb}" loading="lazy">
+        <div class="enh-name">${it.name}</div>
+      </div>`;
+    }).join("");
+    $("grid").innerHTML = html;
+    document.querySelectorAll(".enh-cell").forEach(el => {
+      el.addEventListener("click", onCellClick);
+    });
+  }
+
+  function onCellClick(ev){
+    const i = +ev.currentTarget.dataset.i;
+    const uid = ev.currentTarget.dataset.uid;
+    if(ev.shiftKey && lastClicked >= 0){
+      const [a, b] = [Math.min(i, lastClicked), Math.max(i, lastClicked)];
+      for(let k = a; k <= b; k++) sel.add(items[k].uid);
+    } else if(ev.ctrlKey || ev.metaKey){
+      if(sel.has(uid)) sel.delete(uid); else sel.add(uid);
+    } else {
+      sel.clear(); sel.add(uid);
+    }
+    lastClicked = i;
+    render();
+  }
+
+  document.addEventListener("keydown", ev => {
+    if((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === "i"){
+      ev.preventDefault();
+      window.invertSel();
+    }
+  });
+
+  function effectiveSel(){
+    return sel.size ? Array.from(sel) : items.map(it => it.uid);
+  }
+
+  window.uploadFiles = function(){
+    const fs = $("files").files;
+    if(!fs.length){ setStatus("Pick images first.","err"); return; }
+    const fd = new FormData();
+    for(const f of fs) fd.append("files", f);
+    setStatus("Uploading…");
+    fetch("/enhance/upload", { method:"POST", body:fd })
+      .then(r => r.json())
+      .then(d => {
+        if(d.error){ setStatus(d.error,"err"); return; }
+        const errs = (d.items || []).filter(x => x.error);
+        const oks  = (d.items || []).filter(x => !x.error);
+        items = items.concat(oks);
+        setStatus(`Added ${oks.length}.` + (errs.length ? ` ${errs.length} failed.` : ""), "ok");
+        render();
+      });
+  };
+
+  window.apply = function(op, params){
+    const uids = effectiveSel();
+    if(!uids.length){ setStatus("Add images first.","err"); return; }
+    setStatus("Applying " + op + " …");
+    fetch("/enhance/apply", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({ uids, op, params: params || {} })
+    }).then(r => r.json()).then(d => {
+      if(d.error){ setStatus(d.error,"err"); return; }
+      for(const u of d.items){
+        const it = items.find(x => x.uid === u.uid);
+        if(it && u.thumb){ it.thumb = u.thumb; it.full = u.full; }
+      }
+      setStatus("Done.","ok");
+      render();
+    });
+  };
+
+  window.undo = function(){
+    const uids = effectiveSel();
+    if(!uids.length) return;
+    fetch("/enhance/undo", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({ uids })
+    }).then(r => r.json()).then(d => {
+      for(const u of d.items){
+        const it = items.find(x => x.uid === u.uid);
+        if(it && u.thumb){ it.thumb = u.thumb; it.full = u.full; }
+      }
+      setStatus("Reverted.","ok");
+      render();
+    });
+  };
+
+  window.selectAll  = function(){ items.forEach(it => sel.add(it.uid)); render(); };
+  window.selectNone = function(){ sel.clear(); render(); };
+  window.invertSel  = function(){
+    items.forEach(it => sel.has(it.uid) ? sel.delete(it.uid) : sel.add(it.uid));
+    render();
+  };
+  window.toggleAdv = function(){
+    const a = $("adv");
+    a.style.display = a.style.display === "none" ? "block" : "none";
+  };
+
+  ["hue_v","sat_v","gam_v","lit_v"].forEach(id => {
+    const el = $(id), lab = $(id.replace("_v","_lbl"));
+    if(!el || !lab) return;
+    el.addEventListener("input", () => {
+      lab.innerText = (+el.value).toFixed(id === "hue_v" || id === "lit_v" ? 0 : 2);
+    });
+  });
+
+  window.downloadZip = function(){
+    const uids = effectiveSel();
+    if(!uids.length) return;
+    fetch("/enhance/zip", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({ uids })
+    }).then(r => r.json()).then(d => {
+      if(d.out) window.location.href = d.out;
+    });
+  };
+
+  window.printAllPdf = function(){
+    const uids = effectiveSel();
+    if(!uids.length) return;
+    setStatus("Building PDF…");
+    fetch("/enhance/pdf", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({ uids })
+    }).then(r => r.json()).then(d => {
+      if(d.error){ setStatus(d.error,"err"); return; }
+      setStatus("PDF ready.","ok");
+      window.open(d.out, "_blank");
+    });
+  };
+
+  // drag-drop into the page
+  ["dragenter","dragover"].forEach(ev =>
+    document.addEventListener(ev, e => { e.preventDefault(); $("dropzone").classList.add("drop-show"); }));
+  ["dragleave","drop"].forEach(ev =>
+    document.addEventListener(ev, () => $("dropzone").classList.remove("drop-show")));
+  document.addEventListener("drop", e => {
+    e.preventDefault();
+    if(e.dataTransfer.files.length){
+      $("files").files = e.dataTransfer.files;
+      uploadFiles();
+    }
+  });
+</script>
+
+</body>
+</html>

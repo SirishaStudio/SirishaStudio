@@ -19,8 +19,8 @@ DPI          = 700
 FRONT_CROP   = [0, 1488, 0, 2344]
 BACK_CROP    = [0, 1488, 0, 2344]
 
-# Photo on the FRONT (your spec, given at 72-DPI display canvas 2344 x 1488).
-PHOTO_REGION_72DPI = {"x": 633.6, "y": 110.8, "w": 139.7, "h": 142.5}
+# Photo on the FRONT (your spec, given at canvas 2344x1488 = front_crop dims).
+PHOTO_REGION_72DPI = {"x": 1791, "y": 314, "w": 401, "h": 401}
 FRONT_CANVAS_72DPI = {"w": 2344, "h": 1488}
 
 LEVELS       = {"g_black": 0, "g_gamma": 1.0, "p_white": 255, "p_gamma": 1.0}

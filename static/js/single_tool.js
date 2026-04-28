@@ -1,8 +1,10 @@
 /* Single-image tool runtime — used by Long Aadhar (full PDF page).
- * Adds: drag&drop file upload, paste/drop signature image overlay,
- * download (with overlay baked in), Dev Mode hookup.
+ *
+ * Key change vs prior version: the signature OVERLAY position is stored as
+ * FRACTIONS (0–1) of the canvas client size. On every redraw / resize / zoom,
+ * pixel positions are recomputed from fractions, so the box stays glued to the
+ * same spot on the underlying image even when the browser is zoomed.
  */
-
 (function(){
   const cfg = window.TOOL_CONFIG;
   const $ = id => document.getElementById(id);
@@ -15,17 +17,14 @@
   let history   = [];
   let redoStack = [];
 
-  // Signature overlay state (positioned in CSS-pixel coords on the canvas)
-  // We render it as a positioned <div><img></div> over the canvas during edit,
-  // then bake into a flattened canvas for Print / Download.
+  // Overlay state — STORED AS FRACTIONS of canvas client size:
   const overlay = {
-    img: null,            // HTMLImageElement
+    img: null,
     visible: false,
-    cx: 50, cy: 50,       // CSS pixels relative to canvas
-    cw: 120, ch: 120,
+    fx: 0.55, fy: 0.05, fw: 0.18, fh: 0.18,  // fractional bounds
     dragging: false,
     resizing: false,
-    dragOff: {x:0, y:0}
+    grabFx: 0, grabFy: 0
   };
 
   function setStatus(msg, cls=""){
@@ -47,7 +46,6 @@
       .then(d => {
         if(d.ask_password){ setStatus("Wrong / missing PDF password.", "err"); return; }
         if(d.error){ setStatus(d.error, "err"); return; }
-
         setStatus("");
         history = []; redoStack = [];
         original = null;
@@ -66,14 +64,12 @@
       ctx.drawImage(img, 0, 0);
       original = ctx.getImageData(0, 0, canvas.width, canvas.height);
       apply(true);
-      // Re-position overlay default near photo region after canvas sized
-      if(cfg.allow_paste_overlay){
-        positionOverlayDefault();
-      }
+      if(overlay.visible) placeOverlay();
     };
     img.src = src + "?t=" + Date.now();
   }
 
+  // ---------- LEVELS ----------
   function levels(v, black, gamma){
     if(v > 240) return 255;
     let n = (v - black) / (255 - black);
@@ -89,12 +85,10 @@
   function apply(initial=false){
     if(!original) return;
     if(!initial){ snapshot(); redoStack = []; }
-
     const gB = +$("g_black").value;
     const gG = +$("g_gamma").value;
     const pW = $("p_white") ? +$("p_white").value : 255;
     const pG = $("p_gamma") ? +$("p_gamma").value : 1;
-
     $("g_black_v").innerText = gB;
     $("g_gamma_v").innerText = gG.toFixed(1);
     if($("p_white_v")) $("p_white_v").innerText = pW;
@@ -102,13 +96,11 @@
 
     const out = new ImageData(new Uint8ClampedArray(original.data), original.width);
     const w = out.width;
-
     for(let i = 0; i < out.data.length; i += 4){
       let isPhoto = false;
       if(PHOTO){
         const px = i >> 2;
-        const x  = px % w;
-        const y  = (px / w) | 0;
+        const x = px % w, y = (px / w) | 0;
         isPhoto = (x > PHOTO.x && x < PHOTO.x + PHOTO.w &&
                    y > PHOTO.y && y < PHOTO.y + PHOTO.h);
       }
@@ -137,19 +129,19 @@
     ctx.putImageData(redoStack.pop(), 0, 0);
   };
 
-  // ---------- DOWNLOAD (with overlay baked) ----------
+  // ---------- DOWNLOAD / PRINT (overlay baked) ----------
   function flattenedCanvas(){
     if(!overlay.visible || !overlay.img) return canvas;
     const c2 = document.createElement("canvas");
     c2.width = canvas.width; c2.height = canvas.height;
     const c2x = c2.getContext("2d");
     c2x.drawImage(canvas, 0, 0);
-    // Convert overlay CSS rect -> canvas-pixel rect
-    const sx = canvas.width  / canvas.clientWidth;
-    const sy = canvas.height / canvas.clientHeight;
-    c2x.drawImage(overlay.img,
-      overlay.cx * sx, overlay.cy * sy,
-      overlay.cw * sx, overlay.ch * sy);
+    // Convert overlay fractions into canvas-pixel rect
+    const x = overlay.fx * canvas.width;
+    const y = overlay.fy * canvas.height;
+    const w = overlay.fw * canvas.width;
+    const h = overlay.fh * canvas.height;
+    c2x.drawImage(overlay.img, x, y, w, h);
     return c2;
   }
   window.downloadImg = function(){
@@ -157,14 +149,12 @@
     const fname = cfg.tool_key + "_" + new Date().toISOString().slice(0,19).replace(/[:T-]/g,"") + ".jpg";
     window.downloadCanvas(flattenedCanvas(), fname);
   };
-
-  // ---------- PRINT (with overlay baked) ----------
   window.printA4 = function(){
     if(!original){ setStatus("Process a file first.", "err"); return; }
     window.printSingleA4(flattenedCanvas(), { scale: cfg.print_scale });
   };
 
-  // ---------- PASTE / DROP signature overlay ----------
+  // ---------- OVERLAY (paste signature) ----------
   if(cfg.allow_paste_overlay){
     const box = $("overlay_box");
     const oimg = $("overlay_img");
@@ -175,6 +165,9 @@
       overlay.img = imgEl;
       overlay.visible = true;
       oimg.src = imgEl.src;
+      // reset position to top-right area (fractions)
+      overlay.fx = 0.55; overlay.fy = 0.04;
+      overlay.fw = 0.18; overlay.fh = 0.10;
       box.style.display = "block";
       removeBtn.disabled = false;
       placeOverlay();
@@ -198,7 +191,6 @@
       if(f) loadFromBlob(f);
     });
 
-    // PASTE from clipboard (Ctrl + V anywhere on the page)
     document.addEventListener("paste", e => {
       const items = (e.clipboardData || {}).items || [];
       for(const it of items){
@@ -211,61 +203,73 @@
       }
     });
 
-    // Drag-drop image OR file
     document.addEventListener("drop", e => {
       const dt = e.dataTransfer;
       if(!dt) return;
       const f = dt.files && dt.files[0];
       if(!f) return;
       if(f.type && f.type.indexOf("image/") === 0 && original){
-        // image after a PDF is loaded -> treat as signature paste
         loadFromBlob(f); e.preventDefault();
       }
     });
 
-    // ---- drag & resize the overlay box ----
+    // ---- placement: convert fractions -> CSS pixels ----
     function placeOverlay(){
-      box.style.left   = overlay.cx + "px";
-      box.style.top    = overlay.cy + "px";
-      box.style.width  = overlay.cw + "px";
-      box.style.height = overlay.ch + "px";
-    }
-    function positionOverlayDefault(){
-      // Put it roughly in the lower-right area where Aadhar tick lives
-      overlay.cx = Math.round(canvas.clientWidth  * 0.55);
-      overlay.cy = Math.round(canvas.clientHeight * 0.05);
-      overlay.cw = 120; overlay.ch = 120;
-      placeOverlay();
+      const w = canvas.clientWidth, h = canvas.clientHeight;
+      box.style.left   = (overlay.fx * w) + "px";
+      box.style.top    = (overlay.fy * h) + "px";
+      box.style.width  = (overlay.fw * w) + "px";
+      box.style.height = (overlay.fh * h) + "px";
     }
 
+    // ---- drag / resize → update fractions ----
     box.addEventListener("mousedown", ev => {
+      const r = box.getBoundingClientRect();
+      const cw = canvas.clientWidth, ch = canvas.clientHeight;
       if(ev.target.classList.contains("resize-handle")){
         overlay.resizing = true;
       } else {
         overlay.dragging = true;
-        overlay.dragOff.x = ev.clientX - overlay.cx;
-        overlay.dragOff.y = ev.clientY - overlay.cy;
+        // grab offset in fractions
+        overlay.grabFx = (ev.clientX - r.left) / cw;
+        overlay.grabFy = (ev.clientY - r.top)  / ch;
       }
       ev.preventDefault();
     });
     document.addEventListener("mousemove", ev => {
+      if(!overlay.dragging && !overlay.resizing) return;
+      const cr = canvas.getBoundingClientRect();
+      const cw = canvas.clientWidth, ch = canvas.clientHeight;
       if(overlay.dragging){
-        overlay.cx = ev.clientX - overlay.dragOff.x;
-        overlay.cy = ev.clientY - overlay.dragOff.y;
+        overlay.fx = ((ev.clientX - cr.left) / cw) - overlay.grabFx;
+        overlay.fy = ((ev.clientY - cr.top)  / ch) - overlay.grabFy;
         placeOverlay();
       } else if(overlay.resizing){
         const r = box.getBoundingClientRect();
-        overlay.cw = Math.max(20, ev.clientX - r.left);
-        overlay.ch = Math.max(20, ev.clientY - r.top);
+        const newCssW = Math.max(20, ev.clientX - r.left);
+        const newCssH = Math.max(20, ev.clientY - r.top);
+        overlay.fw = newCssW / cw;
+        overlay.fh = newCssH / ch;
         placeOverlay();
       }
     });
     document.addEventListener("mouseup", () => {
       overlay.dragging = overlay.resizing = false;
     });
+
+    // Keep overlay glued to canvas on window resize / browser zoom.
+    let raf = null;
+    function reflow(){
+      if(raf) cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => { if(overlay.visible) placeOverlay(); });
+    }
+    window.addEventListener("resize", reflow);
+    if(window.ResizeObserver){
+      new ResizeObserver(reflow).observe(canvas);
+    }
   }
 
-  // ---------- DRAG & DROP file (PDF/image) ----------
+  // ---------- DRAG & DROP file ----------
   ["dragenter","dragover"].forEach(ev =>
     document.addEventListener(ev, e => {
       e.preventDefault();
@@ -281,13 +285,11 @@
     const dt = e.dataTransfer;
     const f = dt && dt.files && dt.files[0];
     if(!f) return;
-    // If no image loaded yet -> treat as file upload
     if(!original){
       e.preventDefault();
       $("file").files = dt.files;
       doUpload(f);
     }
-    // else: handled by overlay-paste branch above
   });
 
   // ---------- SLIDERS ----------

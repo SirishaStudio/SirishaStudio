@@ -93,21 +93,23 @@
 <!-- ====== DEV MODE PANEL ====== -->
 <div id="dev_panel" class="dev-panel" style="display:none">
   <div class="dev-head">
-    DEV MODE — {{ tool_key }}
+    <span>DEV MODE — {{ tool_key }}</span>
+    <span id="dev_status_badge" class="dev-badge muted">…</span>
     <button class="x" onclick="toggleDev()">×</button>
   </div>
   <div class="dev-body">
     <div class="dev-section">
-      <div class="dev-title">Saved overrides (overrides.json)</div>
+      <div class="dev-title">CURRENTLY SAVED (overrides.json) — these load every time</div>
       <pre id="dev_dump" class="dev-dump">…</pre>
       <div class="dev-actions">
-        <button class="btn" onclick="devReload()">Reload</button>
+        <button class="btn" onclick="devReload()">Refresh</button>
         <button class="btn" onclick="devReset()">Clear this tool's overrides</button>
       </div>
     </div>
 
     <div class="dev-section">
-      <div class="dev-title">Save current sliders as default</div>
+      <div class="dev-title">Save current sliders as the new defaults</div>
+      <p class="dev-hint">Move the sliders to where you want them, then click Save. The saved values appear above and will be the starting point next time you open this tool.</p>
       <button class="btn primary" onclick="devSaveLevels()">Save level defaults</button>
       <span id="dev_save_msg" class="dev-msg"></span>
     </div>

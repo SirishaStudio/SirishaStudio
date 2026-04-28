@@ -1,0 +1,65 @@
+import os
+import shutil
+import fitz  # PyMuPDF: Much faster than pdf2image
+from PIL import Image
+import pillow_heif
+import pillow_avif
+
+# Register modern format support
+pillow_heif.register_heif_opener()
+
+BASE = os.path.dirname(os.path.abspath(__file__))
+TEMP = os.path.join(BASE, 'temp')
+os.makedirs(TEMP, exist_ok=True)
+
+def flatten_transparency(img):
+    """Pastes transparent images onto white background quickly."""
+    if img.mode in ("RGBA", "LA") or (img.mode == "P" and "transparency" in img.info):
+        img = img.convert("RGBA")
+        bg = Image.new("RGB", img.size, (255, 255, 255))
+        bg.paste(img, mask=img.split()[-1])
+        return bg
+    return img.convert("RGB")
+
+def process_files():
+    # Supported: PDF, HEIC, HEIF, AVIF, PNG, WEBP, ICO, JPG, GIF
+    img_exts = {'.png', '.webp', '.heic', '.heif', '.avif', '.ico', '.gif', '.jpeg', '.jpg'}
+    
+    for file in os.listdir(BASE):
+        src = os.path.join(BASE, file)
+        if os.path.isdir(src) or file.lower().endswith('.py') or file == 'temp':
+            continue
+
+        name, ext = os.path.splitext(file)
+        ext = ext.lower()
+
+        try:
+            # 1. FAST PDF HANDLING (PyMuPDF)
+            if ext == '.pdf':
+                print(f"Fast Converting PDF: {file}")
+                doc = fitz.open(src)
+                for i in range(len(doc)):
+                    page = doc.load_page(i)
+                    pix = page.get_pixmap(matrix=fitz.Matrix(2, 2)) # Fast 2x zoom (~150-200 DPI)
+                    pix.save(os.path.join(BASE, f"{name}_{i+1}.jpg"))
+                doc.close()
+                shutil.move(src, os.path.join(TEMP, file))
+
+            # 2. IMAGE HANDLING (Pillow + Plugins)
+            elif ext in img_exts:
+                print(f"Processing Image: {file}")
+                with Image.open(src) as img:
+                    if ext == '.gif':
+                        img.seek(0) # First frame only
+                    
+                    final_img = flatten_transparency(img)
+                    final_img.save(os.path.join(BASE, f"{name}.jpg"), "JPEG", quality=90)
+                
+                if ext != '.jpg' and ext != '.jpeg':
+                    shutil.move(src, os.path.join(TEMP, file))
+
+        except Exception as e:
+            print(f"Error skipping {file}: {e}")
+
+if __name__ == "__main__":
+    process_files()

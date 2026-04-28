@@ -1,0 +1,101 @@
+import os
+import cv2
+import numpy as np
+from pdf2image import convert_from_path
+import shutil
+import re
+import sys
+import time
+import threading
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+POPPLER_PATH = r"C:\Users\rao\Documents\work\poppler-25.12.0\Library\bin"
+OUTPUT_DIR = os.path.join(BASE_DIR, "output")
+TEMP_DIR = os.path.join(BASE_DIR, "temp")
+
+os.makedirs(OUTPUT_DIR, exist_ok=True)
+os.makedirs(TEMP_DIR, exist_ok=True)
+
+class Loader:
+    def __init__(self, desc="Processing..."):
+        self.desc = desc
+        self.done = False
+
+    def animate(self):
+        for c in ['|', '/', '-', '\\']:
+            if self.done: break
+            sys.stdout.write(f'\r{self.desc} {c} ')
+            sys.stdout.flush()
+            time.sleep(0.1)
+
+    def start(self):
+        self.thread = threading.Thread(target=self.animate)
+        self.thread.start()
+
+    def stop(self):
+        self.done = True
+        self.thread.join()
+        sys.stdout.write('\r' + ' ' * (len(self.desc) + 10) + '\r')
+
+def get_next_index(directory):
+    existing_files = os.listdir(directory)
+    max_num = 0
+    for f in existing_files:
+        match = re.match(r'^(\d+)', f)
+        if match:
+            num = int(match.group(1))
+            if num > max_num: max_num = num
+    return max_num + 1
+
+def process_pan_files():
+    script_name = os.path.basename(__file__)
+    files = [f for f in os.listdir(BASE_DIR) if f.lower().endswith('.pdf') and f != script_name]
+    
+    if not files:
+        return
+
+    card_index = get_next_index(OUTPUT_DIR)
+    
+    for filename in files:
+        input_path = os.path.join(BASE_DIR, filename)
+        file_stem, _ = os.path.splitext(filename)
+        
+        pages = None
+        current_pw = None
+        
+        if file_stem.isdigit():
+            current_pw = file_stem
+            try:
+                pages = convert_from_path(input_path, dpi=700, poppler_path=POPPLER_PATH, userpw=current_pw)
+            except:
+                pages = None
+
+        if pages is None:
+            current_pw = input(f"\n    Password for PAN - {filename}: ")
+        
+        loader = Loader(f"[*] Processing {filename}")
+        loader.start()
+        
+        try:
+            if not pages:
+                pages = convert_from_path(input_path, dpi=700, poppler_path=POPPLER_PATH, userpw=current_pw)
+            
+            full_page = np.array(pages[0])
+            full_page = cv2.cvtColor(full_page, cv2.COLOR_RGB2BGR)
+
+            front_card = full_page[6084:7682, 331:2832]
+            back_card = full_page[6108:7686, 2957:5446]
+
+            cv2.imwrite(os.path.join(OUTPUT_DIR, f"{card_index}f.jpg"), front_card, [int(cv2.IMWRITE_JPEG_QUALITY), 95])
+            cv2.imwrite(os.path.join(OUTPUT_DIR, f"{card_index}b.jpg"), back_card, [int(cv2.IMWRITE_JPEG_QUALITY), 95])
+            
+            loader.stop()
+            shutil.move(input_path, os.path.join(TEMP_DIR, filename))
+            card_index += 1
+
+        except Exception as e:
+            loader.stop()
+            print(f"[x] Error processing {filename}: {e}")
+
+if __name__ == "__main__":
+    process_pan_files()

@@ -15,18 +15,18 @@ bp = Blueprint("pan", __name__)
 TOOL_KEY     = "pan"
 DPI          = 700
 
-# NEW style PAN PDF crop coords (default, current cards):
+# NEW style PAN PDF crop coords (default, current cards) — y1, y2, x1, x2:
 CROP_NEW     = {"front": [6084, 7682, 331, 2832],
                 "back":  [6108, 7686, 2957, 5446]}
 
-# OLD style PAN PDF crop coords (slightly shifted alignment):
-# >>> Replace these with your old-card values; for now they mirror NEW.
-CROP_OLD     = {"front": [6084, 7682, 331, 2832],
-                "back":  [6108, 7686, 2957, 5446]}
+# OLD style PAN PDF crop coords (from your offline `pancard.py` script):
+CROP_OLD     = {"front": [6332, 7760,  662, 2940],
+                "back":  [6328, 7763, 2989, 5275]}
 
-# Photo zone on the FRONT after crop (canvas px). Use Dev Mode -> "Pick region"
-# to update visually; the value here is a starting point.
-PHOTO_REGION = {"x": 40, "y": 80, "w": 520, "h": 640}
+# Photo zone on the FRONT after crop (canvas px on the rendered front image).
+# Cropped front is roughly 2501 x 1598 (NEW). Use Dev Mode -> "Pick on FRONT"
+# to set this exactly for your card layout.
+PHOTO_REGION = {"x": 1500, "y": 280, "w": 720, "h": 880}
 
 # PAN auto-darkens slightly, so default Black is 80, Gamma 1.2 (your offline ratio):
 LEVELS       = {"g_black": 80, "g_gamma": 1.2, "p_white": 255, "p_gamma": 1.2}

@@ -22,9 +22,9 @@ DPI          = 500
 FRONT_CROP   = [802,  802 + 1046, 1208, 1208 + 1662]
 BACK_CROP    = [2190, 2190 + 1046, 1211, 1211 + 1662]
 
-# Photo region on the FRONT after crop, given at 72-DPI display canvas.
-# Cropped front is 1662 x 1046 @ 72 DPI -> JS scales these into canvas pixels.
-PHOTO_REGION_72DPI = {"x": 25.9, "y": 122.1, "w": 129.8, "h": 162.6}
+# Photo region on the FRONT after crop. Cropped front is 1662 x 1046 — values
+# below are at that exact canvas size (JS uses spec.w/h for proportional scaling).
+PHOTO_REGION_72DPI = {"x": 74, "y": 350, "w": 373, "h": 462}
 FRONT_CANVAS_72DPI = {"w": 1662, "h": 1046}
 
 LEVELS       = {"g_black": 128, "g_gamma": 1.2, "p_white": 255, "p_gamma": 1.2}

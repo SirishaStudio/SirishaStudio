@@ -16,6 +16,10 @@ print front+back on A4 (matching your offline batch printer's exact mm sizes).
 | `/rc`           | Vehicle RC two-page PDF → front (page 1) + back (page 2)      |
 | `/dl`           | Driving Licence two-page PDF → front (with photo) + back      |
 | `/senior`       | Senior Citizen PDF → cropped front/back (500 DPI source)      |
+| `/custom`       | Draw FRONT/BACK rectangles on any uploaded card; save preset  |
+| `/convert`      | PDF↔JPG/DOCX, image format swaps, images→one PDF or each→PDF  |
+| `/enhance`      | Multi-image batch: lighten/darken/whiten/dark-fix; print PDF  |
+| `/resume`       | Fresher / Ordinary / Detailed templates → filled DOCX         |
 
 ## Important behaviours
 

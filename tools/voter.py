@@ -18,11 +18,10 @@ DPI          = 700
 FRONT_CROP   = [925, 2415, 320, 2690]    # y1, y2, x1, x2
 BACK_CROP    = [925, 2420, 3178, 5555]
 
-# Two photo regions on the FRONT (your spec, given at 72-DPI display space).
-# The JS converts these to canvas-pixel coords using FRONT_CANVAS_72DPI.
+# Photo region on the FRONT (your spec, given at canvas 2370x1490 = the cropped
+# front size). Single region as you confirmed.
 PHOTO_REGIONS_72DPI = {
-    "color": {"x": 28.2,  "y": 200.4, "w": 208.8, "h": 278.7},
-    "bw":    {"x": 717.6, "y": 140.4, "w": 69.9,  "h": 89.6},
+    "color": {"x": 84, "y": 569, "w": 608, "h": 797},
 }
 FRONT_CANVAS_72DPI = {"w": 2370, "h": 1490}
 BACK_CANVAS_72DPI  = {"w": 2377, "h": 1495}

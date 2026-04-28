@@ -17,10 +17,14 @@ from tools.voter        import bp as voter_bp
 from tools.rc           import bp as rc_bp
 from tools.dl           import bp as dl_bp
 from tools.senior       import bp as senior_bp
+from tools.custom       import bp as custom_bp
+from tools.convert      import bp as convert_bp
+from tools.enhance      import bp as enhance_bp
+from tools.resume       import bp as resume_bp
 
 
 app = Flask(__name__)
-app.config["MAX_CONTENT_LENGTH"] = 64 * 1024 * 1024  # 64 MB uploads
+app.config["MAX_CONTENT_LENGTH"] = 256 * 1024 * 1024  # 256 MB uploads (Enhance batches)
 
 app.register_blueprint(aadhar_short_bp)
 app.register_blueprint(aadhar_long_bp)
@@ -29,6 +33,10 @@ app.register_blueprint(voter_bp)
 app.register_blueprint(rc_bp)
 app.register_blueprint(dl_bp)
 app.register_blueprint(senior_bp)
+app.register_blueprint(custom_bp)
+app.register_blueprint(convert_bp)
+app.register_blueprint(enhance_bp)
+app.register_blueprint(resume_bp)
 
 
 @app.route("/")
@@ -41,6 +49,10 @@ def home():
         {"href": "/rc",           "title": "RC",             "desc": "2-page PDF → front + back"},
         {"href": "/dl",           "title": "Driving Licence","desc": "2-page PDF → front + back"},
         {"href": "/senior",       "title": "Senior Citizen", "desc": "PDF → cropped front + back"},
+        {"href": "/custom",       "title": "Custom Card",    "desc": "Draw FRONT/BACK boxes, save preset"},
+        {"href": "/convert",      "title": "Convert",        "desc": "PDF / image / DOCX any-to-any"},
+        {"href": "/enhance",      "title": "Enhance",        "desc": "Batch lighten / darken / fix dark / PDF"},
+        {"href": "/resume",       "title": "Resume Maker",   "desc": "Fresher / Ordinary / Detailed → DOCX"},
     ]
     return render_template("index.html", tools=tools, descale=GLOBAL_PRINT_DESCALE)
 

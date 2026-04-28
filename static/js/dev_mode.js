@@ -1,68 +1,81 @@
 /* Dev Mode — shared by dual + single tools.
- * Provides:
- *   - toggleDev()   : show/hide the dev panel
- *   - devReload()   : refresh saved overrides JSON dump
- *   - devReset()    : delete this tool's overrides
- *   - devSaveLevels(): save current slider values as defaults for this tool
- *   - devPick(which): drag a rectangle on a canvas to capture coords
- *   - devSavePhoto(): save the picked rectangle as photo_region for this tool
  *
- * Tools are responsible for exposing window.DEV_API = { canvases, getLevels }.
+ * NEW behaviour:
+ *  - Always shows what's CURRENTLY persisted in overrides.json for this tool
+ *  - Save buttons re-fetch the persisted state immediately so you can see the change
+ *  - "Apply now" re-runs the level pipeline so saved defaults take effect without reload
+ *  - Region picker stores both the picked rect and the canvas dims it was picked at
  */
-
 window.DEV = (function(){
   const $ = id => document.getElementById(id);
   let lastPick = null;
-  let pickActive = null;
   let pickOverlay = null;
   let startPx = null;
 
   function tool(){ return window.TOOL_CONFIG.tool_key; }
 
+  // ------- panel show/hide -------
   window.toggleDev = function(){
     const p = $("dev_panel");
-    const open = p.style.display === "none";
+    const open = p.style.display === "none" || p.style.display === "";
     p.style.display = open ? "block" : "none";
     if(open) devReload();
   };
 
+  // ------- read saved state -------
   window.devReload = async function(){
-    const r = await fetch("/dev/overrides/" + tool());
-    const j = await r.json();
-    $("dev_dump").innerText = JSON.stringify(j, null, 2);
+    try{
+      const r = await fetch("/dev/overrides/" + tool());
+      const j = await r.json();
+      const empty = !j || Object.keys(j).length === 0;
+      $("dev_dump").innerText = empty
+        ? "(none — using built-in defaults from tools/" + tool() + ".py)"
+        : JSON.stringify(j, null, 2);
+      const badge = $("dev_status_badge");
+      if(badge) badge.innerText = empty ? "no overrides" : "overrides ACTIVE";
+      if(badge) badge.className = empty ? "dev-badge muted" : "dev-badge ok";
+    } catch(e){
+      $("dev_dump").innerText = "Failed to load: " + e;
+    }
   };
 
+  // ------- clear -------
   window.devReset = async function(){
     if(!confirm("Delete saved overrides for this tool?")) return;
     await fetch("/dev/overrides/" + tool(), { method:"DELETE" });
+    flash("Cleared.");
     devReload();
-    flash("Cleared. Refresh the page to see in-code defaults.");
   };
 
+  // ------- save current sliders as default -------
   window.devSaveLevels = async function(){
     if(!window.DEV_API || !window.DEV_API.getLevels){
       flash("Tool not ready."); return;
     }
     const lv = window.DEV_API.getLevels();
-    await fetch("/dev/overrides/" + tool(), {
+    const r = await fetch("/dev/overrides/" + tool(), {
       method:"POST",
       headers:{ "Content-Type":"application/json" },
       body: JSON.stringify({ levels: lv })
     });
-    flash("Saved. New defaults: " + JSON.stringify(lv));
-    devReload();
+    const j = await r.json();
+    if(j.ok){
+      flash("SAVED. New defaults will load every time.", "ok");
+      devReload();
+    } else {
+      flash("Save failed.", "err");
+    }
   };
 
+  // ------- pick region -------
   window.devPick = function(which){
     if(!window.DEV_API || !window.DEV_API.canvases){
       flash("Open a file first."); return;
     }
     const c = window.DEV_API.canvases[which];
     if(!c){ flash("Canvas '"+which+"' not found."); return; }
-    pickActive = c;
     flash("Drag a rectangle on the " + which.toUpperCase() + " image…");
 
-    // overlay div sits above the canvas to capture mouse
     pickOverlay = document.createElement("div");
     pickOverlay.className = "pick-overlay";
     const wrap = c.parentElement;
@@ -81,20 +94,21 @@ window.DEV = (function(){
     pickOverlay.onmousedown = ev => {
       const r = pickOverlay.getBoundingClientRect();
       startPx = { x: ev.clientX - r.left, y: ev.clientY - r.top };
-      rectDiv.style.left = startPx.x + "px";
-      rectDiv.style.top  = startPx.y + "px";
-      rectDiv.style.width = "0px";
-      rectDiv.style.height = "0px";
-      rectDiv.style.display = "block";
+      Object.assign(rectDiv.style, {
+        left: startPx.x + "px", top: startPx.y + "px",
+        width: "0px", height: "0px", display: "block"
+      });
     };
     pickOverlay.onmousemove = ev => {
       if(!startPx) return;
       const r = pickOverlay.getBoundingClientRect();
       const x = ev.clientX - r.left, y = ev.clientY - r.top;
       const x1 = Math.min(startPx.x, x), y1 = Math.min(startPx.y, y);
-      rectDiv.style.left = x1 + "px"; rectDiv.style.top = y1 + "px";
-      rectDiv.style.width  = Math.abs(x - startPx.x) + "px";
-      rectDiv.style.height = Math.abs(y - startPx.y) + "px";
+      Object.assign(rectDiv.style, {
+        left: x1 + "px", top: y1 + "px",
+        width: Math.abs(x - startPx.x) + "px",
+        height: Math.abs(y - startPx.y) + "px"
+      });
     };
     pickOverlay.onmouseup = ev => {
       if(!startPx) return;
@@ -104,7 +118,6 @@ window.DEV = (function(){
       const cssY1 = Math.min(startPx.y, y);
       const cssW  = Math.abs(x - startPx.x);
       const cssH  = Math.abs(y - startPx.y);
-      // map CSS pixels back to canvas pixels
       const sx = c.width  / c.clientWidth;
       const sy = c.height / c.clientHeight;
       lastPick = {
@@ -125,29 +138,47 @@ window.DEV = (function(){
     if(pickOverlay && pickOverlay.parentElement){
       pickOverlay.parentElement.removeChild(pickOverlay);
     }
-    pickOverlay = null; startPx = null; pickActive = null;
+    pickOverlay = null; startPx = null;
   }
 
+  // ------- save the picked rect as photo region -------
   window.devSavePhoto = async function(){
     if(!lastPick){ flash("Nothing picked yet."); return; }
+    // Save in BOTH layouts so any of the per-tool files can read it:
+    const rect = { x:lastPick.x, y:lastPick.y, w:lastPick.w, h:lastPick.h };
     const patch = {
-      photo_region: { x:lastPick.x, y:lastPick.y, w:lastPick.w, h:lastPick.h }
+      photo_region: rect,
+      photo_region_72dpi: rect,
+      front_canvas_72dpi: { w:lastPick.canvas_w, h:lastPick.canvas_h },
+      photo_regions_72dpi: { main: rect },
     };
-    await fetch("/dev/overrides/" + tool(), {
+    const r = await fetch("/dev/overrides/" + tool(), {
       method:"POST",
       headers:{ "Content-Type":"application/json" },
       body: JSON.stringify(patch)
     });
-    flash("Saved. Reload page to see new region applied.");
-    devReload();
+    if((await r.json()).ok){
+      flash("SAVED. Re-process the file to see the new region in action.", "ok");
+      devReload();
+    }
   };
 
-  function flash(msg){
+  // ------- inline status banner -------
+  function flash(msg, cls=""){
     const m = document.getElementById("dev_save_msg");
-    if(m){ m.innerText = msg; setTimeout(() => { m.innerText = ""; }, 4000); }
+    if(m){
+      m.innerText = msg;
+      m.className = "dev-msg " + cls;
+      setTimeout(() => { if(m.innerText === msg) m.innerText = ""; }, 5000);
+    }
     const s = document.getElementById("status");
-    if(s){ s.innerText = msg; }
+    if(s){ s.innerText = msg; s.className = cls; }
   }
 
-  return { flash };
+  // Reload on first script load so the dev panel is correct if user opens it
+  document.addEventListener("DOMContentLoaded", () => {
+    if(document.getElementById("dev_dump")) devReload();
+  });
+
+  return { flash, devReload };
 })();

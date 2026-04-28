@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>{{ title }} — Studio</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+
+<div class="topbar">
+  <a class="back-link" href="/">← All tools</a>
+  <span class="brand">SIRISHA STUDIO</span>
+</div>
+
+<h2>Convert</h2>
+
+<div class="upload-bar">
+  <input type="file" id="files" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,.heif,.avif,.bmp,.gif,.tif,.tiff">
+  <select id="op" class="mode-select">
+    <optgroup label="PDF">
+      <option value="pdf2jpg">PDF → JPG (one per page)</option>
+      <option value="pdf2docx">PDF → DOCX</option>
+    </optgroup>
+    <optgroup label="Image format">
+      <option value="img2jpg">Images → JPG</option>
+      <option value="img2png">Images → PNG</option>
+      <option value="img2webp">Images → WEBP</option>
+    </optgroup>
+    <optgroup label="To PDF">
+      <option value="imgs2pdf_one">All images → ONE PDF</option>
+      <option value="imgs2pdf_each">Each image → SEPARATE PDF</option>
+    </optgroup>
+    <optgroup label="To DOCX">
+      <option value="img2docx">Image → DOCX (A4)</option>
+    </optgroup>
+  </select>
+  <button class="btn primary" onclick="runConvert()">⚙ Convert</button>
+  <button class="btn" id="zip_btn" onclick="zipAll()" disabled>📦 Download all (zip)</button>
+</div>
+
+<p id="status"></p>
+
+<div id="results" class="convert-results"></div>
+
+<div id="dropzone" class="dropzone">Drop files anywhere here</div>
+
+<script>
+  const $ = id => document.getElementById(id);
+  let lastResults = [];
+
+  function setStatus(m, c=""){ $("status").innerText = m; $("status").className = c; }
+
+  function render(results){
+    lastResults = results.filter(r => r.out);
+    $("zip_btn").disabled = lastResults.length === 0;
+    const html = results.map(r => {
+      if(r.error){
+        return `<div class="conv-row err">
+          <span class="conv-name">${r.src}</span>
+          <span class="conv-err">${r.error}</span></div>`;
+      }
+      return `<div class="conv-row ok">
+        <span class="conv-name">${r.src}</span>
+        <span class="conv-label">${r.label || ""}</span>
+        <a class="btn primary" href="${r.out}" download>⤓ Download</a></div>`;
+    }).join("");
+    $("results").innerHTML = html || '<p style="text-align:center;color:var(--muted)">No results yet.</p>';
+  }
+
+  window.runConvert = function(){
+    const fs = $("files").files;
+    if(!fs.length){ setStatus("Pick at least one file.","err"); return; }
+    const fd = new FormData();
+    fd.append("op", $("op").value);
+    for(const f of fs) fd.append("files", f);
+    setStatus("Converting…");
+    fetch("/convert/run", { method:"POST", body:fd })
+      .then(r => r.json())
+      .then(d => {
+        if(d.error){ setStatus(d.error,"err"); return; }
+        setStatus("Done.","ok");
+        render(d.results || []);
+      });
+  };
+
+  window.zipAll = function(){
+    if(!lastResults.length) return;
+    fetch("/convert/zip", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({ paths: lastResults.map(r => r.out) })
+    }).then(r => r.json()).then(d => {
+      if(d.out) window.location.href = d.out;
+    });
+  };
+
+  // drag-drop
+  ["dragenter","dragover"].forEach(ev =>
+    document.addEventListener(ev, e => { e.preventDefault(); $("dropzone").classList.add("drop-show"); }));
+  ["dragleave","drop"].forEach(ev =>
+    document.addEventListener(ev, () => $("dropzone").classList.remove("drop-show")));
+  document.addEventListener("drop", e => {
+    e.preventDefault();
+    if(e.dataTransfer.files.length){
+      $("files").files = e.dataTransfer.files;
+      setStatus(e.dataTransfer.files.length + " file(s) ready. Pick a conversion → Convert.");
+    }
+  });
+</script>
+
+</body>
+</html>

@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Resume Maker — Studio</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+
+<div class="topbar">
+  <a class="back-link" href="/">← All tools</a>
+  <span class="brand">SIRISHA STUDIO</span>
+</div>
+
+<h2>Resume Maker</h2>
+
+<p style="text-align:center;color:var(--muted);max-width:700px;margin:0 auto 12px">
+  Pick a template first — that's how I know which layout to fill.
+  Then just fill what you have. Anything you leave blank stays blank in the file.
+</p>
+
+<div class="resume-pick" id="picker">
+  {% for k, t in templates.items() %}
+    <div class="resume-card" data-key="{{ k }}" onclick="pickTemplate('{{ k }}')">
+      <h3>{{ t.label }}</h3>
+      <p>{{ t.blurb }}</p>
+    </div>
+  {% endfor %}
+</div>
+
+<form id="form" class="resume-form" style="display:none" onsubmit="event.preventDefault();build();">
+  <fieldset>
+    <legend>WHO YOU ARE</legend>
+    <div class="grid2">
+      <div><label>Full name</label><input id="f_name"></div>
+      <div><label>Father's name</label><input id="f_father"></div>
+      <div><label>Date of Birth</label><input id="f_dob" placeholder="DD-MM-YYYY"></div>
+      <div><label>Gender</label><input id="f_gender"></div>
+      <div><label>Nationality</label><input id="f_nationality"></div>
+      <div><label>Marital status</label><input id="f_marital"></div>
+      <div><label>Religion (Detailed only)</label><input id="f_religion"></div>
+      <div><label>Languages known</label><input id="f_languages"></div>
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>CONTACT</legend>
+    <div class="grid2">
+      <div><label>Address line 1</label><input id="f_addr1"></div>
+      <div><label>Address line 2</label><input id="f_addr2"></div>
+      <div><label>City / PIN</label><input id="f_city"></div>
+      <div><label>Mobile</label><input id="f_mobile"></div>
+      <div style="grid-column:1/-1"><label>Email</label><input id="f_email"></div>
+    </div>
+  </fieldset>
+
+  <fieldset id="fs_simple_edu">
+    <legend>EDUCATION (Fresher template only)</legend>
+    <div><label>Degree</label><input id="f_degree"></div>
+    <div><label>Intermediate</label><input id="f_inter"></div>
+    <div><label>SSC</label><input id="f_ssc"></div>
+  </fieldset>
+
+  <fieldset id="fs_table_edu" style="display:none">
+    <legend>EDUCATION TABLE (one row per qualification)</legend>
+    <p class="dev-hint">Leave any cell blank to keep template default.</p>
+    <div id="edu_rows"></div>
+    <button type="button" class="btn" onclick="addEduRow()">+ Add row</button>
+  </fieldset>
+
+  <div style="text-align:center;margin:14px 0">
+    <button type="submit" class="btn primary">⚙ Generate DOCX</button>
+    <button type="button" class="btn" onclick="resetPicker()">← Change template</button>
+  </div>
+</form>
+
+<p id="status" style="text-align:center"></p>
+<div id="result" style="text-align:center;margin:12px"></div>
+
+<script>
+  const $ = id => document.getElementById(id);
+  let template = null;
+
+  function setStatus(m, c=""){ $("status").innerText = m; $("status").className = c; }
+
+  window.pickTemplate = function(k){
+    template = k;
+    document.querySelectorAll(".resume-card").forEach(el =>
+      el.classList.toggle("sel", el.dataset.key === k));
+    $("form").style.display = "block";
+    $("fs_simple_edu").style.display = (k === "fresher") ? "" : "none";
+    $("fs_table_edu").style.display  = (k === "fresher") ? "none" : "";
+    if(k !== "fresher" && !$("edu_rows").children.length){
+      addEduRow(); addEduRow();
+    }
+  };
+
+  window.resetPicker = function(){
+    template = null;
+    $("form").style.display = "none";
+    document.querySelectorAll(".resume-card").forEach(el => el.classList.remove("sel"));
+    setStatus("");
+  };
+
+  let eduRowIdx = 0;
+  window.addEduRow = function(){
+    const i = ++eduRowIdx;
+    const div = document.createElement("div");
+    div.className = "grid2";
+    div.style.cssText = "margin-bottom:6px;grid-template-columns:1fr 2fr 1fr 1fr 1fr;gap:6px";
+    div.dataset.row = i;
+    div.innerHTML = `
+      <input placeholder="Course (e.g. SSC)"   data-c="1">
+      <input placeholder="Institute"            data-c="2">
+      <input placeholder="Board / University"   data-c="3">
+      <input placeholder="Year"                 data-c="4">
+      <input placeholder="%"                    data-c="5">`;
+    $("edu_rows").appendChild(div);
+  };
+
+  window.build = function(){
+    if(!template){ setStatus("Pick a template first.","err"); return; }
+    const fields = {};
+    ["name","father","dob","gender","nationality","marital","religion","languages",
+     "addr1","addr2","city","mobile","email","degree","inter","ssc"].forEach(k => {
+      const el = $("f_" + k);
+      if(el && el.value.trim()) fields[k] = el.value.trim();
+    });
+    const education = [];
+    document.querySelectorAll("#edu_rows > div").forEach(row => {
+      const r = {};
+      row.querySelectorAll("input").forEach(el => {
+        if(el.value.trim()) r["c" + el.dataset.c] = el.value.trim();
+      });
+      if(Object.keys(r).length) education.push(r);
+    });
+
+    setStatus("Generating…");
+    fetch("/resume/build", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({ template, fields, education })
+    }).then(r => r.json()).then(d => {
+      if(d.error){ setStatus(d.error,"err"); return; }
+      setStatus("Done.","ok");
+      $("result").innerHTML =
+        `<a class="btn primary" href="${d.out}" download>⤓ Download ${d.name}</a>`;
+    });
+  };
+</script>
+
+</body>
+</html>

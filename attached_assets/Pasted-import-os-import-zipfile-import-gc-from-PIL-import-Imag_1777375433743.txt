@@ -1,0 +1,73 @@
+import os
+import zipfile
+import gc
+from PIL import Image
+from docx2pdf import convert
+
+BASE = os.path.dirname(os.path.abspath(__file__))
+TEMP = os.path.join(BASE, "temp")
+ZIP_NAME = "files_backup.zip"
+os.makedirs(TEMP, exist_ok=True)
+
+def process():
+    jpg_files = []
+    word_files = []
+    images = []
+
+    for file in sorted(os.listdir(BASE)):
+        path = os.path.join(BASE, file)
+        if os.path.isdir(path) or file.lower().endswith('.py') or file == 'temp':
+            continue
+            
+        ext = file.lower()
+        if ext.endswith((".jpg", ".jpeg")):
+            jpg_files.append(file)
+            img = Image.open(path).convert("RGB")
+            images.append(img)
+        elif ext.endswith(".docx"):
+            word_files.append(file)
+
+    if not jpg_files and not word_files:
+        print("No files found.")
+        return
+
+    print("1. All images into ONE PDF")
+    print("2. Each image into SEPARATE PDFs")
+    mode = input("Choice (1-2): ")
+
+    if images:
+        if mode == '1':
+            output_path = os.path.join(BASE, "merged_images.pdf")
+            images[0].save(output_path, save_all=True, append_images=images[1:])
+            print(f"Saved merged PDF.")
+        else:
+            for i, img in enumerate(images):
+                img.save(os.path.join(BASE, f"{os.path.splitext(jpg_files[i])[0]}.pdf"))
+            print(f"Saved {len(images)} separate PDFs.")
+        
+        for img in images:
+            img.close()
+        del images
+        gc.collect()
+
+    for doc in word_files:
+        try:
+            convert(os.path.join(BASE, doc), os.path.join(BASE, doc.replace(".docx", ".pdf")))
+        except Exception as e:
+            print(f"Error doc {doc}: {e}")
+
+    zip_path = os.path.join(TEMP, ZIP_NAME)
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
+        for f in jpg_files + word_files:
+            zipf.write(os.path.join(BASE, f), f)
+
+    for f in jpg_files + word_files:
+        try:
+            os.remove(os.path.join(BASE, f))
+        except:
+            pass
+
+    print(f"Done. Backed up to {ZIP_NAME}")
+
+if __name__ == "__main__":
+    process()
