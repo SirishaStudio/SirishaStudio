@@ -23,5 +23,5 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 #  Linux / Mac / Replit:
 #       POPPLER_PATH = None      # poppler is on PATH already
 #
-POPPLER_PATH = None
+POPPLER_PATH = r"C:\Users\rao\Documents\work\poppler-25.12.0\Library\bin"
 # ============================================================
