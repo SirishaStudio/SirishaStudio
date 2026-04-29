@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Print Tray — Sirisha Studio</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+<style>
+  .tray-actions{
+    display:flex; gap:8px; flex-wrap:wrap; justify-content:center;
+    margin:14px auto;
+  }
+  .tray-empty{
+    text-align:center; padding:40px 20px;
+    color:var(--muted); font-size:13px;
+    max-width:560px; margin:30px auto;
+    border:1px dashed var(--border); border-radius:14px;
+  }
+  .tray-empty b{ color:var(--text); }
+  .tray-summary{
+    text-align:center; color:var(--muted); font-size:12px; margin:6px 0 16px;
+  }
+  .tray-grid{
+    max-width:1080px; margin:0 auto 30px;
+    display:grid;
+    grid-template-columns:repeat(auto-fill, minmax(280px, 1fr));
+    gap:14px; padding:0 16px;
+  }
+  .tray-card{
+    background:var(--panel); border:1px solid var(--border); border-radius:12px;
+    padding:10px 12px;
+  }
+  .tray-card-head{
+    display:flex; justify-content:space-between; align-items:center;
+    margin-bottom:8px;
+  }
+  .tray-card-head .lab{
+    font-size:11px; letter-spacing:1px; color:var(--accent);
+    text-transform:uppercase;
+  }
+  .tray-card-head .x{
+    background:transparent; border:1px solid var(--border); color:var(--muted);
+    border-radius:6px; cursor:pointer; padding:2px 8px; font-size:11px;
+  }
+  .tray-card-head .x:hover{ color:#ff8e8e; border-color:#ff8e8e; }
+  .tray-imgs{ display:flex; gap:6px; }
+  .tray-imgs img{
+    flex:1; min-width:0; max-width:50%;
+    border:1px solid var(--border); border-radius:6px;
+    background:white; object-fit:contain;
+  }
+  .tray-imgs img.solo{ max-width:100%; }
+  .tray-foot{
+    color:var(--muted); font-size:10px; margin-top:6px;
+    display:flex; justify-content:space-between;
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <a class="back-link" href="/">← All tools</a>
+  <span class="brand">SIRISHA STUDIO</span>
+</div>
+
+<h2>Print Tray</h2>
+<p style="text-align:center;color:var(--muted);font-size:12px;max-width:760px;margin:0 auto 12px">
+  Cards you sent here from any tool — PAN, Voter, RC, anything. Mix freely.
+  When you click <b>Print All</b>, every card is laid out across as many A4
+  sheets as needed (up to 4 cards per page) at each card's correct print scale.
+</p>
+
+<div class="tray-actions">
+  <button class="btn primary" id="btn_print" onclick="doPrint()">🖨 Print All on A4</button>
+  <button class="btn" id="btn_clear" onclick="doClear()">🗑 Clear Tray</button>
+  <a class="btn" href="/">＋ Add more cards</a>
+</div>
+
+<div class="tray-summary" id="summary"></div>
+
+<div id="empty" class="tray-empty" style="display:none">
+  Tray is empty.<br><br>
+  Open any card tool (<b>PAN</b>, <b>Voter</b>, <b>RC</b>, …), process a card,
+  click <b>＋ Add to Tray</b>. Repeat for every card you want on the same A4
+  batch — even mixing different card types.
+</div>
+
+<div class="tray-grid" id="grid"></div>
+
+<script src="{{ url_for('static', filename='js/print_a4.js') }}"></script>
+<script>
+  const $ = id => document.getElementById(id);
+
+  function fmtTime(ts){
+    const d = new Date(ts);
+    return d.toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"});
+  }
+
+  function render(){
+    const list = window.trayLoad();
+    const empty = list.length === 0;
+    $("empty").style.display = empty ? "" : "none";
+    $("btn_print").disabled = empty;
+    $("btn_clear").disabled = empty;
+    $("summary").innerText = empty
+      ? ""
+      : (list.length + " card" + (list.length===1?"":"s") + " queued · " +
+         Math.ceil(list.length / 4) + " A4 page" + (list.length<=4?"":"s") + " will print");
+
+    $("grid").innerHTML = list.map((c, i) => {
+      const back = c.back ? `<img src="${c.back}">` : "";
+      const soloClass = c.back ? "" : " solo";
+      return `
+        <div class="tray-card">
+          <div class="tray-card-head">
+            <span class="lab">${i+1}. ${c.label}</span>
+            <button class="x" onclick="rm('${c.id}')">Remove</button>
+          </div>
+          <div class="tray-imgs">
+            <img class="${soloClass}" src="${c.front}">${back}
+          </div>
+          <div class="tray-foot">
+            <span>scale ${c.scale}×</span>
+            <span>${fmtTime(c.ts)}</span>
+          </div>
+        </div>`;
+    }).join("");
+  }
+
+  window.rm = function(id){
+    window.trayRemove(id);
+    render();
+  };
+
+  window.doClear = function(){
+    if(!confirm("Empty the entire tray?")) return;
+    window.trayClear();
+    render();
+  };
+
+  window.doPrint = function(){
+    const list = window.trayLoad();
+    if(!list.length) return;
+    window.printTrayA4(list);
+  };
+
+  render();
+</script>
+
+</body>
+</html>

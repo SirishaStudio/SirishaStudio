@@ -14,7 +14,7 @@ The home page groups tools into **four sections**:
 |-----------------|---------------------------------------------------------------|
 | `/short-aadhar` | Aadhar PDF → cropped front/back, with PHOTO region levels     |
 | `/long-aadhar`  | Aadhar PDF → full page; paste signature screenshot overlay    |
-| `/pan`          | PAN PDF → cropped front/back (single coord, no Old/New)       |
+| `/pan`          | PAN PDF → cropped front/back. **New / Old** modes, each with its own crop AND its own front-photo zone |
 | `/voter`        | Voter PDF/JPG/PNG → front/back. Two photo regions on front    |
 | `/rc`           | Vehicle RC two-page PDF → front (page 1) + back (page 2)      |
 | `/dl`           | DL two-page PDF → front+back, **auto-trims black borders**    |
@@ -38,6 +38,15 @@ The home page groups tools into **four sections**:
 | Route           | What it does                                                  |
 |-----------------|---------------------------------------------------------------|
 | `/custom`       | Draw FRONT/BACK rectangles on any uploaded card; save preset  |
+
+**Print Tray** (top-right of every page)
+
+`/tray` — every card tool now has a **+ Add to Tray** button. Process a PAN,
+add it. Process two more PANs, add them. Process a Voter, add it. Open
+**/tray** and click **Print All on A4** — all four cards lay out across the
+needed number of A4 sheets (4 cards per page max), each at its own correct
+print scale. The tray lives in browser sessionStorage so closing the tab
+clears it; re-opening preserves it within the session.
 
 ## Important behaviours
 

@@ -4,6 +4,33 @@
 <meta charset="UTF-8">
 <title>Image Compressor — Studio</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+<style>
+  .compress-card{
+    max-width:560px; margin:18px auto; padding:18px 20px;
+    background:var(--panel); border:1px solid var(--border); border-radius:14px;
+  }
+  .compress-card h3{ margin:0 0 4px; font-size:14px; color:var(--accent); letter-spacing:1px; }
+  .compress-card .sub{ color:var(--muted); font-size:12px; margin-bottom:14px; }
+  .field{ margin:12px 0; }
+  .field label{ display:block; font-size:11px; color:var(--muted); margin-bottom:4px; letter-spacing:1px; }
+  .field input[type=file], .field input[type=number]{
+    width:100%; box-sizing:border-box; background:var(--bg);
+    border:1px solid var(--border); color:var(--text);
+    padding:8px 10px; border-radius:8px; font-size:13px;
+  }
+  .quick{ display:flex; gap:6px; flex-wrap:wrap; margin-top:6px; }
+  .quick button{
+    background:var(--bg); border:1px solid var(--border); color:var(--muted);
+    border-radius:6px; padding:4px 10px; font-size:11px; cursor:pointer;
+  }
+  .quick button:hover{ color:var(--text); border-color:var(--accent); }
+  .adv{ margin-top:14px; }
+  .adv summary{
+    cursor:pointer; font-size:11px; color:var(--muted);
+    letter-spacing:1px; padding:4px 0;
+  }
+  .go{ text-align:center; margin-top:14px; }
+</style>
 </head>
 <body>
 
@@ -12,22 +39,42 @@
   <span class="brand">SIRISHA STUDIO</span>
 </div>
 
-<h2>Compress to Target KB</h2>
-<p style="text-align:center;color:var(--muted);font-size:12px;max-width:700px;margin:0 auto 12px">
-  For govt portals that say "image must be under 100 KB" — drop an image,
-  tell us a target size, and we binary-search the JPEG quality (and downscale
-  if needed) until it fits.
-</p>
+<h2>Compress an Image</h2>
 
-<div class="upload-bar">
-  <input type="file" id="file" accept=".jpg,.jpeg,.png,.webp,.bmp">
-  <input type="number" id="target_kb" value="100" min="5" max="5000" style="width:90px"
-         title="Target size in KB">
-  <span class="conv-label">KB</span>
-  <input type="number" id="max_dim" value="0" min="0" max="6000" style="width:90px"
-         title="Cap longest side in pixels (0 = no cap)">
-  <span class="conv-label">max px</span>
-  <button class="btn primary" onclick="run()">⚙ Compress</button>
+<div class="compress-card">
+  <h3>BRING ANY IMAGE UNDER A TARGET SIZE</h3>
+  <div class="sub">For govt portals that demand things like <i>"photo must be under 100&nbsp;KB"</i>.
+    Pick an image, type the size limit in KB, click Compress.</div>
+
+  <div class="field">
+    <label>1 · Image to compress</label>
+    <input type="file" id="file" accept=".jpg,.jpeg,.png,.webp,.bmp">
+  </div>
+
+  <div class="field">
+    <label>2 · Target file size (KB)</label>
+    <input type="number" id="target_kb" value="100" min="5" max="5000">
+    <div class="quick">
+      <button type="button" onclick="setKB(20)">20 KB</button>
+      <button type="button" onclick="setKB(50)">50 KB</button>
+      <button type="button" onclick="setKB(100)">100 KB</button>
+      <button type="button" onclick="setKB(200)">200 KB</button>
+      <button type="button" onclick="setKB(500)">500 KB</button>
+      <button type="button" onclick="setKB(1024)">1 MB</button>
+    </div>
+  </div>
+
+  <details class="adv">
+    <summary>Advanced (optional)</summary>
+    <div class="field" style="margin-top:8px">
+      <label>Cap longest side in pixels (0 = keep original size)</label>
+      <input type="number" id="max_dim" value="0" min="0" max="6000">
+    </div>
+  </details>
+
+  <div class="go">
+    <button class="btn primary" onclick="run()">⚙ Compress</button>
+  </div>
 </div>
 
 <p id="status" style="text-align:center"></p>
@@ -36,6 +83,7 @@
 <script>
   const $ = id => document.getElementById(id);
   function setStatus(m,c=""){ $("status").innerText = m; $("status").className = c; }
+  window.setKB = (v) => { $("target_kb").value = v; };
 
   window.run = function(){
     const f = $("file").files[0];
@@ -43,12 +91,12 @@
     const fd = new FormData();
     fd.append("file", f);
     fd.append("target_kb", $("target_kb").value);
-    fd.append("max_dim", $("max_dim").value);
+    fd.append("max_dim", $("max_dim").value || "0");
     setStatus("Compressing…");
     fetch("/compress/process", { method:"POST", body: fd })
       .then(r => r.json()).then(d => {
         if(d.error){ setStatus(d.error, "err"); return; }
-        setStatus(`${d.size_kb} KB at JPEG quality ${d.quality}`, "ok");
+        setStatus(`Done — ${d.size_kb} KB (target was ${d.target_kb} KB, JPEG quality ${d.quality})`, "ok");
         $("result").innerHTML = `
           <img src="${d.image}?t=${Date.now()}" style="max-width:560px;border:1px solid var(--border);border-radius:8px;background:white"><br>
           <a class="btn primary" style="margin-top:10px" href="${d.image}" download>⤓ Download compressed JPG</a>`;

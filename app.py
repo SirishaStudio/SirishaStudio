@@ -53,7 +53,7 @@ TOOL_SECTIONS = [
         "tools": [
             {"href": "/short-aadhar", "title": "Short Aadhar",   "desc": "PDF → cropped front + back"},
             {"href": "/long-aadhar",  "title": "Long Aadhar",    "desc": "Full page + paste signature tick"},
-            {"href": "/pan",          "title": "PAN",            "desc": "Single coord, photo levels"},
+            {"href": "/pan",          "title": "PAN",            "desc": "Old / New PAN modes, separate photo zones"},
             {"href": "/voter",        "title": "Voter ID",       "desc": "PDF / image → front + back"},
             {"href": "/rc",           "title": "RC",             "desc": "2-page PDF → front + back"},
             {"href": "/dl",           "title": "Driving Licence","desc": "2-page PDF, auto-trim borders"},
@@ -94,6 +94,11 @@ def home():
     return render_template("index.html",
                            sections=TOOL_SECTIONS,
                            descale=GLOBAL_PRINT_DESCALE)
+
+
+@app.route("/tray")
+def tray():
+    return render_template("tray.html")
 
 
 @app.route("/file/<name>")

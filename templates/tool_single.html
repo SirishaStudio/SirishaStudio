@@ -24,6 +24,8 @@
   <button class="btn" onclick="redo()">↪ Redo</button>
   <button class="btn" onclick="downloadImg()">⤓ Download</button>
   <button class="btn" onclick="printA4()">🖨 Print A4</button>
+  <button class="btn primary" onclick="addToTray()">＋ Add to Tray</button>
+  <a class="btn" href="/tray" data-tray-badge>Tray</a>
   <button class="btn dev" onclick="toggleDev()">DEV</button>
 </div>
 
@@ -135,6 +137,7 @@
 <script>
   window.TOOL_CONFIG = {
     tool_key:    {{ tool_key|tojson }},
+    title:       {{ title|tojson }},
     process_url: {{ process_url|tojson }},
     photo_region:{{ photo_region|tojson }},
     print_scale: {{ print_scale|tojson }},

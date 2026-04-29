@@ -8,8 +8,14 @@
 <body>
   <div class="topbar">
     <span class="brand">SIRISHA STUDIO</span>
-    <span class="back-link">card processor</span>
+    <span style="display:flex;gap:10px;align-items:center">
+      <a class="back-link" href="/tray" data-tray-badge style="border:1px solid var(--border);padding:4px 10px;border-radius:6px">Tray</a>
+      <span class="back-link">card processor</span>
+    </span>
   </div>
+
+  <script src="{{ url_for('static', filename='js/print_a4.js') }}"></script>
+  <script>document.addEventListener("DOMContentLoaded", () => window.trayBadgeRefresh());</script>
 
   <h1>Studio</h1>
   <p style="text-align:center;color:var(--muted);font-size:13px;margin-top:0">

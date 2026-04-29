@@ -66,6 +66,10 @@
         originalFront = null; originalBack = null;
         backReady = !!d.back;
 
+        // Per-mode photo region (e.g. PAN Old vs New) — backend tells us
+        // which zone to mask for THIS specific upload.
+        if(d.photo_region) cfg.photo_region = d.photo_region;
+
         backCanvas.parentElement.style.display = backReady ? "" : "none";
         load(frontCanvas, fctx, d.front, true);
         if(backReady) load(backCanvas, bctx, d.back, false);
@@ -225,6 +229,18 @@
   window.downloadBack = function(){
     if(!backReady){ setStatus("No back image.", "err"); return; }
     window.downloadCanvas(backCanvas, fname("back"));
+  };
+
+  // ---------- TRAY ----------
+  window.addToTray = function(){
+    if(!originalFront){ setStatus("Process a file first.", "err"); return; }
+    const ok = window.trayAdd(
+      cfg.title || cfg.tool_key,
+      cfg.print_scale || 1.0,
+      frontCanvas,
+      backReady ? backCanvas : null
+    );
+    if(ok){ setStatus("Added to tray (" + window.trayCount() + " card" + (window.trayCount()===1?"":"s") + " queued).", "ok"); }
   };
 
   // ---------- PRINT ----------

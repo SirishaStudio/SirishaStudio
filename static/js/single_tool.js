@@ -153,6 +153,16 @@
     if(!original){ setStatus("Process a file first.", "err"); return; }
     window.printSingleA4(flattenedCanvas(), { scale: cfg.print_scale });
   };
+  window.addToTray = function(){
+    if(!original){ setStatus("Process a file first.", "err"); return; }
+    const ok = window.trayAdd(
+      cfg.title || cfg.tool_key,
+      cfg.print_scale || 1.0,
+      flattenedCanvas(),
+      null
+    );
+    if(ok){ setStatus("Added to tray (" + window.trayCount() + " card" + (window.trayCount()===1?"":"s") + " queued).", "ok"); }
+  };
 
   // ---------- OVERLAY (paste signature) ----------
   if(cfg.allow_paste_overlay){
