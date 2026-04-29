@@ -1,11 +1,11 @@
-modules = ["web", "python-3.12"]
+modules = ["web", "python-3.11"]
 [agent]
 expertMode = true
-stack = "BEST_EFFORT_FALLBACK"
+stack = "FLASK_VANILLA_JS"
 
 [nix]
 channel = "stable-25_05"
-packages = ["freetype", "glibcLocales", "gumbo", "harfbuzz", "imagemagickBig", "jbig2dec", "libGL", "libGLU", "libaom", "libde265", "libheif", "libjpeg_turbo", "mupdf", "nasm", "openjpeg", "poppler_utils", "swig", "x265", "xcbuild"]
+packages = ["freetype", "glibcLocales", "gumbo", "harfbuzz", "imagemagickBig", "jbig2dec", "libGL", "libGLU", "libaom", "libde265", "libheif", "libjpeg_turbo", "mupdf", "nasm", "openjpeg", "openssl", "poppler_utils", "postgresql", "swig", "x265", "xcbuild"]
 
 [workflows]
 runButton = "Project"
@@ -37,4 +37,4 @@ externalPort = 80
 
 [deployment]
 deploymentTarget = "autoscale"
-run = ["gunicorn", "--bind=0.0.0.0:5000", "--reuse-port", "--timeout=300", "app:app"]
+run = ["gunicorn", "--bind", "0.0.0.0:5000", "main:app"]
