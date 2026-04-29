@@ -4,6 +4,30 @@
 <meta charset="UTF-8">
 <title>Resume Maker — Studio</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+<style>
+  .row-list{ display:flex; flex-direction:column; gap:6px; margin-bottom:8px; }
+  .row-item{
+    display:grid; gap:6px; align-items:center;
+    background:rgba(255,255,255,.02);
+    border:1px solid var(--border); border-radius:8px; padding:6px 8px;
+  }
+  .row-item .del{
+    background:transparent; border:1px solid var(--danger); color:var(--danger);
+    border-radius:6px; padding:3px 8px; font-size:11px; cursor:pointer;
+  }
+  .row-item .del:hover{ background:rgba(239,68,68,.1); }
+  .row-item.cols-edu{ grid-template-columns:1.1fr 1.6fr 1.3fr 0.8fr 0.8fr 36px; }
+  .row-item.cols-fresh-edu{ grid-template-columns:1fr 2fr 0.8fr 36px; }
+  .row-item.cols-bullet{ grid-template-columns:1fr 36px; }
+  .row-item.cols-skill{ grid-template-columns:1fr 1.5fr 36px; }
+  .add-btn{
+    background:var(--panel-2); border:1px dashed var(--accent); color:var(--accent);
+    border-radius:8px; padding:5px 10px; font-size:12px; cursor:pointer;
+    margin-bottom:6px;
+  }
+  .add-btn:hover{ background:rgba(59,130,246,.08); }
+  .resume-form input, .resume-form textarea{ font-size:12px; padding:5px 8px; }
+</style>
 </head>
 <body>
 
@@ -14,9 +38,9 @@
 
 <h2>Resume Maker</h2>
 
-<p style="text-align:center;color:var(--muted);max-width:700px;margin:0 auto 12px">
-  Pick a template first — that's how I know which layout to fill.
-  Then just fill what you have. Anything you leave blank stays blank in the file.
+<p style="text-align:center;color:var(--muted);max-width:760px;margin:0 auto 12px;font-size:12px">
+  Pick a template first, then fill what you have. Anything you leave blank is left out of the file.
+  Use the <b>+ Add</b> buttons to add as many rows as you need; <b>×</b> removes one.
 </p>
 
 <div class="resume-pick" id="picker">
@@ -29,6 +53,7 @@
 </div>
 
 <form id="form" class="resume-form" style="display:none" onsubmit="event.preventDefault();build();">
+
   <fieldset>
     <legend>WHO YOU ARE</legend>
     <div class="grid2">
@@ -36,10 +61,11 @@
       <div><label>Father's name</label><input id="f_father"></div>
       <div><label>Date of Birth</label><input id="f_dob" placeholder="DD-MM-YYYY"></div>
       <div><label>Gender</label><input id="f_gender"></div>
-      <div><label>Nationality</label><input id="f_nationality"></div>
-      <div><label>Marital status</label><input id="f_marital"></div>
-      <div><label>Religion (Detailed only)</label><input id="f_religion"></div>
-      <div><label>Languages known</label><input id="f_languages"></div>
+      <div><label>Nationality</label><input id="f_nationality" placeholder="Indian"></div>
+      <div><label>Marital status</label><input id="f_marital" placeholder="Unmarried / Single / Married"></div>
+      <div class="row-religion" style="display:none"><label>Religion</label><input id="f_religion"></div>
+      <div><label>Languages known</label><input id="f_languages" placeholder="Telugu, English"></div>
+      <div style="grid-column:1/-1"><label>Hobbies</label><input id="f_hobbies" placeholder="Cricket, Reading"></div>
     </div>
   </fieldset>
 
@@ -54,18 +80,55 @@
     </div>
   </fieldset>
 
-  <fieldset id="fs_simple_edu">
-    <legend>EDUCATION (Fresher template only)</legend>
-    <div><label>Degree</label><input id="f_degree"></div>
-    <div><label>Intermediate</label><input id="f_inter"></div>
-    <div><label>SSC</label><input id="f_ssc"></div>
+  <fieldset>
+    <legend>CAREER OBJECTIVE</legend>
+    <textarea id="f_objective" placeholder="Leave blank for a sensible default."></textarea>
   </fieldset>
 
-  <fieldset id="fs_table_edu" style="display:none">
-    <legend>EDUCATION TABLE (one row per qualification)</legend>
-    <p class="dev-hint">Leave any cell blank to keep template default.</p>
-    <div id="edu_rows"></div>
-    <button type="button" class="btn" onclick="addEduRow()">+ Add row</button>
+  <!-- FRESHER: simple qualification list -->
+  <fieldset id="fs_fresher_edu" style="display:none">
+    <legend>ACADEMIC QUALIFICATIONS  —  add any you completed</legend>
+    <p class="dev-hint">Examples: SSC, Diploma, Inter, B.Tech, Degree, P.G. — add as many rows as needed.</p>
+    <div id="fresh_edu_rows" class="row-list"></div>
+    <button type="button" class="add-btn" onclick="addFreshEdu()">+ Add qualification</button>
+  </fieldset>
+
+  <!-- ORDINARY / DETAILED: 5-col education table -->
+  <fieldset id="fs_edu_table" style="display:none">
+    <legend id="fs_edu_legend">EDUCATION TABLE</legend>
+    <div id="edu_rows" class="row-list"></div>
+    <button type="button" class="add-btn" onclick="addEduRow()">+ Add row</button>
+  </fieldset>
+
+  <!-- ORDINARY / DETAILED: experience -->
+  <fieldset id="fs_experience" style="display:none">
+    <legend>WORK EXPERIENCE  —  leave empty if you have none</legend>
+    <p class="dev-hint">Each row is one bullet on the resume. Nothing is pre-filled.</p>
+    <div id="exp_rows" class="row-list"></div>
+    <button type="button" class="add-btn" onclick="addExpRow()">+ Add experience entry</button>
+  </fieldset>
+
+  <!-- ORDINARY / DETAILED: strengths -->
+  <fieldset id="fs_strengths" style="display:none">
+    <legend>STRENGTHS</legend>
+    <div id="str_rows" class="row-list"></div>
+    <button type="button" class="add-btn" onclick="addStrRow()">+ Add strength</button>
+  </fieldset>
+
+  <!-- DETAILED ONLY: technical skills -->
+  <fieldset id="fs_skills" style="display:none">
+    <legend>TECHNICAL SKILLS</legend>
+    <p class="dev-hint">Label : Value — e.g. <i>Office Suite : MS Office</i></p>
+    <div id="skill_rows" class="row-list"></div>
+    <button type="button" class="add-btn" onclick="addSkillRow()">+ Add skill</button>
+  </fieldset>
+
+  <fieldset>
+    <legend>PLACE / DATE</legend>
+    <div class="grid2">
+      <div><label>Place</label><input id="f_place" placeholder="Visakhapatnam"></div>
+      <div><label>Date</label><input id="f_date"></div>
+    </div>
   </fieldset>
 
   <div style="text-align:center;margin:14px 0">
@@ -83,16 +146,49 @@
 
   function setStatus(m, c=""){ $("status").innerText = m; $("status").className = c; }
 
+  // -------- template picker --------
   window.pickTemplate = function(k){
     template = k;
     document.querySelectorAll(".resume-card").forEach(el =>
       el.classList.toggle("sel", el.dataset.key === k));
     $("form").style.display = "block";
-    $("fs_simple_edu").style.display = (k === "fresher") ? "" : "none";
-    $("fs_table_edu").style.display  = (k === "fresher") ? "none" : "";
-    if(k !== "fresher" && !$("edu_rows").children.length){
+
+    const isFresher  = (k === "fresher");
+    const isOrdinary = (k === "ordinary");
+    const isDetailed = (k === "detailed");
+
+    $("fs_fresher_edu").style.display = isFresher ? "" : "none";
+    $("fs_edu_table"  ).style.display = isFresher ? "none" : "";
+    $("fs_experience" ).style.display = isFresher ? "none" : "";
+    $("fs_strengths"  ).style.display = isFresher ? "none" : "";
+    $("fs_skills"     ).style.display = isDetailed ? "" : "none";
+
+    document.querySelectorAll(".row-religion").forEach(el =>
+      el.style.display = isDetailed ? "" : "none");
+
+    // Set legend to match template-specific column meaning
+    $("fs_edu_legend").innerText = isDetailed
+      ? "EDUCATIONAL QUALIFICATION  (5 columns — add / delete rows freely)"
+      : "EDUCATIONAL QUALIFICATION  (5 columns)";
+
+    // Seed with one editable row of each list-section if empty
+    if(isFresher && !$("fresh_edu_rows").children.length){
+      addFreshEdu(); addFreshEdu(); addFreshEdu();
+    }
+    if(!isFresher && !$("edu_rows").children.length){
       addEduRow(); addEduRow();
     }
+    if(!isFresher && !$("exp_rows").children.length){
+      addExpRow();
+    }
+    if(!isFresher && !$("str_rows").children.length){
+      addStrRow(); addStrRow();
+    }
+    if(isDetailed && !$("skill_rows").children.length){
+      addSkillRow(); addSkillRow();
+    }
+
+    window.scrollTo({ top: $("form").offsetTop - 30, behavior: "smooth" });
   };
 
   window.resetPicker = function(){
@@ -100,51 +196,122 @@
     $("form").style.display = "none";
     document.querySelectorAll(".resume-card").forEach(el => el.classList.remove("sel"));
     setStatus("");
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  let eduRowIdx = 0;
-  window.addEduRow = function(){
-    const i = ++eduRowIdx;
+  // -------- generic row helpers --------
+  function delBtn(el){
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "del"; b.innerText = "×";
+    b.title = "Delete this row";
+    b.onclick = () => el.remove();
+    return b;
+  }
+
+  // -------- FRESHER qualifications --------
+  window.addFreshEdu = function(prefill = {}){
     const div = document.createElement("div");
-    div.className = "grid2";
-    div.style.cssText = "margin-bottom:6px;grid-template-columns:1fr 2fr 1fr 1fr 1fr;gap:6px";
-    div.dataset.row = i;
+    div.className = "row-item cols-fresh-edu";
     div.innerHTML = `
-      <input placeholder="Course (e.g. SSC)"   data-c="1">
-      <input placeholder="Institute"            data-c="2">
-      <input placeholder="Board / University"   data-c="3">
-      <input placeholder="Year"                 data-c="4">
-      <input placeholder="%"                    data-c="5">`;
+      <input data-k="course"    placeholder="Course (e.g. SSC / Inter / B.Tech / Diploma)" value="${prefill.course||""}">
+      <input data-k="institute" placeholder="Institute" value="${prefill.institute||""}">
+      <input data-k="year"      placeholder="Year" value="${prefill.year||""}">`;
+    div.appendChild(delBtn(div));
+    $("fresh_edu_rows").appendChild(div);
+  };
+
+  // -------- 5-col education --------
+  window.addEduRow = function(prefill = {}){
+    const div = document.createElement("div");
+    div.className = "row-item cols-edu";
+    const isDetailed = template === "detailed";
+    div.innerHTML = `
+      <input data-k="c1" placeholder="${isDetailed?'Qualification':'Course'}" value="${prefill.c1||""}">
+      <input data-k="c2" placeholder="${isDetailed?'University / College':'Institute'}" value="${prefill.c2||""}">
+      <input data-k="c3" placeholder="${isDetailed?'Specialization':'Board / University'}" value="${prefill.c3||""}">
+      <input data-k="c4" placeholder="${isDetailed?'% / Marks':'Year'}" value="${prefill.c4||""}">
+      <input data-k="c5" placeholder="${isDetailed?'Year':'%'}" value="${prefill.c5||""}">`;
+    div.appendChild(delBtn(div));
     $("edu_rows").appendChild(div);
   };
 
+  // -------- experience bullet --------
+  window.addExpRow = function(prefill = ""){
+    const div = document.createElement("div");
+    div.className = "row-item cols-bullet";
+    div.innerHTML = `<input data-k="text" placeholder="e.g. Sales Officer at HDFC Bank, Apr 2022 to Nov 2023" value="${prefill}">`;
+    div.appendChild(delBtn(div));
+    $("exp_rows").appendChild(div);
+  };
+
+  // -------- strength bullet --------
+  window.addStrRow = function(prefill = ""){
+    const div = document.createElement("div");
+    div.className = "row-item cols-bullet";
+    div.innerHTML = `<input data-k="text" placeholder="e.g. Good Communication Skills" value="${prefill}">`;
+    div.appendChild(delBtn(div));
+    $("str_rows").appendChild(div);
+  };
+
+  // -------- skill row --------
+  window.addSkillRow = function(prefill = {}){
+    const div = document.createElement("div");
+    div.className = "row-item cols-skill";
+    div.innerHTML = `
+      <input data-k="label" placeholder="Label (e.g. Office Suite)" value="${prefill.label||""}">
+      <input data-k="value" placeholder="Value (e.g. M.S. Office)"   value="${prefill.value||""}">`;
+    div.appendChild(delBtn(div));
+    $("skill_rows").appendChild(div);
+  };
+
+  function collectRows(rootId){
+    const out = [];
+    document.querySelectorAll(`#${rootId} > .row-item`).forEach(div => {
+      const obj = {};
+      div.querySelectorAll("input").forEach(el => {
+        const k = el.dataset.k;
+        if(k) obj[k] = el.value.trim();
+      });
+      // For bullet rows, simplify to plain text
+      if("text" in obj){
+        if(obj.text) out.push(obj.text);
+      } else if(Object.values(obj).some(v => v)) {
+        out.push(obj);
+      }
+    });
+    return out;
+  }
+
   window.build = function(){
     if(!template){ setStatus("Pick a template first.","err"); return; }
+
     const fields = {};
     ["name","father","dob","gender","nationality","marital","religion","languages",
-     "addr1","addr2","city","mobile","email","degree","inter","ssc"].forEach(k => {
+     "addr1","addr2","city","mobile","email","place","date","objective","hobbies"
+    ].forEach(k => {
       const el = $("f_" + k);
       if(el && el.value.trim()) fields[k] = el.value.trim();
     });
-    const education = [];
-    document.querySelectorAll("#edu_rows > div").forEach(row => {
-      const r = {};
-      row.querySelectorAll("input").forEach(el => {
-        if(el.value.trim()) r["c" + el.dataset.c] = el.value.trim();
-      });
-      if(Object.keys(r).length) education.push(r);
-    });
+
+    const payload = {
+      template, fields,
+      qualifications: collectRows("fresh_edu_rows"),
+      education:      collectRows("edu_rows"),
+      experience:     collectRows("exp_rows"),
+      strengths:      collectRows("str_rows"),
+      skills:         collectRows("skill_rows"),
+    };
 
     setStatus("Generating…");
     fetch("/resume/build", {
       method:"POST", headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({ template, fields, education })
+      body: JSON.stringify(payload)
     }).then(r => r.json()).then(d => {
       if(d.error){ setStatus(d.error,"err"); return; }
       setStatus("Done.","ok");
       $("result").innerHTML =
         `<a class="btn primary" href="${d.out}" download>⤓ Download ${d.name}</a>`;
-    });
+    }).catch(e => setStatus("Build failed: " + e, "err"));
   };
 </script>
 

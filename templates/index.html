@@ -17,13 +17,21 @@
     All A4 prints are descaled to {{ (descale * 100)|round(0)|int }}% by default.
   </p>
 
-  <div class="tiles">
-    {% for t in tools %}
-    <a class="tile" href="{{ t.href }}">
-      <div class="t">{{ t.title }}</div>
-      <div class="d">{{ t.desc }}</div>
-    </a>
-    {% endfor %}
-  </div>
+  {% for sec in sections %}
+    <section class="tool-section">
+      <div class="tool-section-head">
+        <h3>{{ sec.title }}</h3>
+        <span>{{ sec.blurb }}</span>
+      </div>
+      <div class="tiles">
+        {% for t in sec.tools %}
+          <a class="tile" href="{{ t.href }}">
+            <div class="t">{{ t.title }}</div>
+            <div class="d">{{ t.desc }}</div>
+          </a>
+        {% endfor %}
+      </div>
+    </section>
+  {% endfor %}
 </body>
 </html>

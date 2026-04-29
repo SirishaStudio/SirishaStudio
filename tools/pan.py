@@ -1,7 +1,8 @@
 """PAN — single PDF page, two card crops on the same page.
 
-Supports OLD-style and NEW-style PAN PDFs (different alignment). The user picks
-the mode in the UI; both crop sets are listed below for easy editing.
+ONE coordinate set is used for both Old- and New-style PAN PDFs (you finalised
+to a single layout). The mode toggle was removed; if you ever need a separate
+old layout, override `crop` via Dev Mode.
 """
 
 from flask import Blueprint, render_template, request, jsonify
@@ -15,20 +16,16 @@ bp = Blueprint("pan", __name__)
 TOOL_KEY     = "pan"
 DPI          = 700
 
-# NEW style PAN PDF crop coords (default, current cards) — y1, y2, x1, x2:
-CROP_NEW     = {"front": [6084, 7682, 331, 2832],
+# Single, finalised PAN crop (y1, y2, x1, x2):
+CROP         = {"front": [6084, 7682, 331, 2832],
                 "back":  [6108, 7686, 2957, 5446]}
 
-# OLD style PAN PDF crop coords (from your offline `pancard.py` script):
-CROP_OLD     = {"front": [6332, 7760,  662, 2940],
-                "back":  [6328, 7763, 2989, 5275]}
+# Photo zone on the FRONT after crop. Locked-in coords from your Dev-Mode pick.
+# Cropped front is roughly 2501 x 1598; coords are in canvas-pixel space.
+PHOTO_REGION       = {"x": 68, "y": 294, "w": 435, "h": 533}
+FRONT_CANVAS_72DPI = {"w": 2501, "h": 1598}
 
-# Photo zone on the FRONT after crop (canvas px on the rendered front image).
-# Cropped front is roughly 2501 x 1598 (NEW). Use Dev Mode -> "Pick on FRONT"
-# to set this exactly for your card layout.
-PHOTO_REGION = {"x": 1500, "y": 280, "w": 720, "h": 880}
-
-# PAN auto-darkens slightly, so default Black is 80, Gamma 1.2 (your offline ratio):
+# PAN auto-darkens slightly, so default Black is 80, Gamma 1.2:
 LEVELS       = {"g_black": 80, "g_gamma": 1.2, "p_white": 255, "p_gamma": 1.2}
 
 # 102 % print scale (cards print very slightly larger than physical):
@@ -38,8 +35,10 @@ PRINT_SCALE  = 1.02
 
 def _cfg():
     return utils.merged(TOOL_KEY, {
-        "crop_new": CROP_NEW, "crop_old": CROP_OLD,
-        "photo_region": PHOTO_REGION, "levels": LEVELS,
+        "crop": CROP,
+        "photo_region": PHOTO_REGION,
+        "front_canvas_72dpi": FRONT_CANVAS_72DPI,
+        "levels": LEVELS,
         "print_scale": PRINT_SCALE, "dpi": DPI,
     })
 
@@ -59,8 +58,7 @@ def page():
         defaults=c["levels"],
         print_scale=c["print_scale"],
         print_mode="dual",
-        modes=[{"key": "new", "label": "New PAN"},
-               {"key": "old", "label": "Old PAN"}],
+        modes=None,
         cfg=c,
     )
 
@@ -69,7 +67,6 @@ def page():
 def process():
     file = request.files.get("file")
     password = request.form.get("password", "")
-    mode = (request.form.get("mode") or "new").lower()
     if not file:
         return jsonify({"error": "No file uploaded"})
 
@@ -92,7 +89,7 @@ def process():
     except Exception as e:
         return jsonify({"error": str(e)})
 
-    crop = c["crop_old"] if mode == "old" else c["crop_new"]
+    crop = c["crop"]
     fy1, fy2, fx1, fx2 = crop["front"]
     by1, by2, bx1, bx2 = crop["back"]
     front = utils.safe_crop(img, fy1, fy2, fx1, fx2)

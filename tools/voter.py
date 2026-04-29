@@ -1,7 +1,7 @@
 """VOTER — single PDF / image, two crops on the same page.
 
-Voter front has TWO photo regions (large color + small B&W) — both get the
-PHOTO levels treatment.
+Voter front carries a single photo zone (locked-in coords from your Dev-Mode
+pick). Levels are tuned for typical voter PDFs.
 """
 
 from flask import Blueprint, render_template, request, jsonify
@@ -18,14 +18,14 @@ DPI          = 700
 FRONT_CROP   = [925, 2415, 320, 2690]    # y1, y2, x1, x2
 BACK_CROP    = [925, 2420, 3178, 5555]
 
-# Photo region on the FRONT (your spec, given at canvas 2370x1490 = the cropped
-# front size). Single region as you confirmed.
+# Photo region on the FRONT (locked-in from Dev Mode pick).
 PHOTO_REGIONS_72DPI = {
     "color": {"x": 84, "y": 569, "w": 608, "h": 797},
 }
 FRONT_CANVAS_72DPI = {"w": 2370, "h": 1490}
 BACK_CANVAS_72DPI  = {"w": 2377, "h": 1495}
 
+# Locked-in: Black 65 / Gamma 1.3 / White 255 / Photo Gamma 1.3
 LEVELS       = {"g_black": 65, "g_gamma": 1.3, "p_white": 255, "p_gamma": 1.3}
 PRINT_SCALE  = 1.00
 # ============================================================

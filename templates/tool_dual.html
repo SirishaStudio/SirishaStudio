@@ -128,8 +128,44 @@
       <pre id="dev_picked" class="dev-dump">(no selection yet)</pre>
       <div class="dev-actions">
         <button class="btn" onclick="devSavePhoto()">Save as photo region</button>
+        <button class="btn" onclick="devSavePhotoBack()">Save as BACK photo region</button>
       </div>
     </div>
+
+    {% if dev_extras and dev_extras.dl_border %}
+    <div class="dev-section">
+      <div class="dev-title">DL  ·  Black border trim</div>
+      <p class="dev-hint">
+        Auto-trim removes the two thick black borders DL PDFs ship with by detecting
+        the inset bounding box of non-near-black pixels. Manual trim is applied on
+        top in pixels per side. Save to persist for every future DL.
+      </p>
+      <div class="row" style="margin:6px 0">
+        <label style="width:auto"><input type="checkbox" id="dl_auto_enabled"
+            {% if dev_extras.dl_border_settings.auto_trim.enabled %}checked{% endif %}> Auto-trim</label>
+      </div>
+      <div class="row"><label>Threshold</label>
+        <input type="number" id="dl_auto_thr" min="0" max="120"
+               value="{{ dev_extras.dl_border_settings.auto_trim.threshold }}" style="width:64px"></div>
+      <div class="row"><label>Inner pad px</label>
+        <input type="number" id="dl_auto_pad" min="0" max="50"
+               value="{{ dev_extras.dl_border_settings.auto_trim.inner_pad_px }}" style="width:64px"></div>
+      <div class="row"><label>Max %</label>
+        <input type="number" id="dl_auto_max" min="0" max="50"
+               value="{{ dev_extras.dl_border_settings.auto_trim.max_trim_pct }}" style="width:64px"></div>
+      <div class="row"><label>Top px</label>
+        <input type="number" id="dl_man_top"    min="0" value="{{ dev_extras.dl_border_settings.manual_trim.top }}"    style="width:64px"></div>
+      <div class="row"><label>Bottom px</label>
+        <input type="number" id="dl_man_bottom" min="0" value="{{ dev_extras.dl_border_settings.manual_trim.bottom }}" style="width:64px"></div>
+      <div class="row"><label>Left px</label>
+        <input type="number" id="dl_man_left"   min="0" value="{{ dev_extras.dl_border_settings.manual_trim.left }}"   style="width:64px"></div>
+      <div class="row"><label>Right px</label>
+        <input type="number" id="dl_man_right"  min="0" value="{{ dev_extras.dl_border_settings.manual_trim.right }}"  style="width:64px"></div>
+      <div class="dev-actions">
+        <button class="btn primary" onclick="devSaveDLBorder()">Save trim settings</button>
+      </div>
+    </div>
+    {% endif %}
   </div>
 </div>
 

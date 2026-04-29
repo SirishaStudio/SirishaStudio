@@ -163,6 +163,53 @@ window.DEV = (function(){
     }
   };
 
+  // ------- save the picked rect as BACK photo region -------
+  window.devSavePhotoBack = async function(){
+    if(!lastPick){ flash("Nothing picked yet."); return; }
+    const rect = { x:lastPick.x, y:lastPick.y, w:lastPick.w, h:lastPick.h };
+    const patch = {
+      back_photo_region: rect,
+      back_canvas_72dpi: { w:lastPick.canvas_w, h:lastPick.canvas_h },
+    };
+    const r = await fetch("/dev/overrides/" + tool(), {
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify(patch)
+    });
+    if((await r.json()).ok){
+      flash("BACK region SAVED. Re-process to apply.", "ok");
+      devReload();
+    }
+  };
+
+  // ------- save DL black-border trim settings -------
+  window.devSaveDLBorder = async function(){
+    const num = id => parseFloat(document.getElementById(id).value || "0");
+    const patch = {
+      auto_trim: {
+        enabled:      document.getElementById("dl_auto_enabled").checked,
+        threshold:    num("dl_auto_thr"),
+        inner_pad_px: num("dl_auto_pad"),
+        max_trim_pct: num("dl_auto_max"),
+      },
+      manual_trim: {
+        top:    num("dl_man_top"),
+        bottom: num("dl_man_bottom"),
+        left:   num("dl_man_left"),
+        right:  num("dl_man_right"),
+      },
+    };
+    const r = await fetch("/dev/overrides/" + tool(), {
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify(patch)
+    });
+    if((await r.json()).ok){
+      flash("Trim settings SAVED. Re-process to apply.", "ok");
+      devReload();
+    }
+  };
+
   // ------- inline status banner -------
   function flash(msg, cls=""){
     const m = document.getElementById("dev_save_msg");

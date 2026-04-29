@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>QR Code — Studio</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+<style>
+  .qr-form{ max-width:560px; margin:14px auto; padding:0 12px; }
+  .qr-form fieldset{ border:1px solid var(--border); border-radius:8px; padding:10px 14px; margin-bottom:10px; }
+  .qr-form legend{ color:var(--accent); font-size:12px; padding:0 6px; }
+  .qr-form label{ display:block; font-size:11px; color:var(--muted); margin-bottom:2px; }
+  .qr-form input, .qr-form select, .qr-form textarea{
+    background:var(--bg); border:1px solid var(--border); color:var(--text);
+    padding:6px 8px; border-radius:6px; width:100%; box-sizing:border-box;
+    font-size:12px;
+  }
+  .qr-form .grid2{ display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:6px; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <a class="back-link" href="/">← All tools</a>
+  <span class="brand">SIRISHA STUDIO</span>
+</div>
+
+<h2>QR Code Generator</h2>
+<p style="text-align:center;color:var(--muted);font-size:12px;max-width:700px;margin:0 auto 12px">
+  Make printable QR codes for plain text, links, UPI payments, or Wi-Fi credentials.
+  Output is a crisp PNG.
+</p>
+
+<form class="qr-form" onsubmit="event.preventDefault();run();">
+  <fieldset>
+    <legend>WHAT KIND OF QR</legend>
+    <label>Type</label>
+    <select id="mode" onchange="showFields()">
+      <option value="text">Plain text</option>
+      <option value="url">URL / Link</option>
+      <option value="upi">UPI Payment</option>
+      <option value="wifi">Wi-Fi credentials</option>
+    </select>
+  </fieldset>
+
+  <fieldset id="fs_text">
+    <label>Text / URL</label>
+    <textarea id="data" placeholder="Anything you want encoded"></textarea>
+  </fieldset>
+
+  <fieldset id="fs_upi" style="display:none">
+    <div class="grid2">
+      <div><label>UPI ID (pa)</label><input id="pa" placeholder="name@bank"></div>
+      <div><label>Payee name (pn)</label><input id="pn" placeholder="Sirisha Studio"></div>
+      <div><label>Amount (am)</label><input id="am" placeholder="100"></div>
+      <div><label>Currency (cu)</label><input id="cu" value="INR"></div>
+    </div>
+    <label>Note (tn)</label>
+    <input id="tn" placeholder="Order #123">
+  </fieldset>
+
+  <fieldset id="fs_wifi" style="display:none">
+    <div class="grid2">
+      <div><label>SSID</label><input id="ssid"></div>
+      <div><label>Password</label><input id="pwd"></div>
+      <div><label>Encryption</label>
+        <select id="enc"><option>WPA</option><option>WEP</option><option>nopass</option></select>
+      </div>
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>STYLE</legend>
+    <div class="grid2">
+      <div><label>Size (box px per module)</label><input id="box_size" type="number" value="10" min="4" max="30"></div>
+      <div><label>Border modules</label><input id="border" type="number" value="2" min="1" max="10"></div>
+    </div>
+    <label><input type="checkbox" id="high_ec"> High error-correction (better when partially damaged / printed small)</label>
+  </fieldset>
+
+  <div style="text-align:center">
+    <button type="submit" class="btn primary">⚙ Generate QR</button>
+  </div>
+</form>
+
+<p id="status" style="text-align:center"></p>
+<div id="result" style="text-align:center;margin:14px"></div>
+
+<script>
+  const $ = id => document.getElementById(id);
+  function setStatus(m,c=""){ $("status").innerText = m; $("status").className = c; }
+
+  window.showFields = function(){
+    const m = $("mode").value;
+    $("fs_text").style.display = (m === "text" || m === "url") ? "" : "none";
+    $("fs_upi").style.display  = (m === "upi") ? "" : "none";
+    $("fs_wifi").style.display = (m === "wifi") ? "" : "none";
+  };
+
+  window.run = function(){
+    const m = $("mode").value;
+    const body = {
+      mode: m,
+      data: $("data").value,
+      pa: $("pa").value, pn: $("pn").value, am: $("am").value,
+      cu: $("cu").value, tn: $("tn").value,
+      ssid: $("ssid").value, pwd: $("pwd").value, enc: $("enc").value,
+      box_size: $("box_size").value, border: $("border").value,
+      high_ec: $("high_ec").checked,
+    };
+    setStatus("Generating…");
+    fetch("/qr/process", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify(body)
+    }).then(r => r.json()).then(d => {
+      if(d.error){ setStatus(d.error, "err"); return; }
+      setStatus("Encoded: " + d.data, "ok");
+      $("result").innerHTML = `
+        <img src="${d.image}?t=${Date.now()}" style="max-width:320px;border:1px solid var(--border);border-radius:8px;background:white"><br>
+        <a class="btn primary" style="margin-top:10px" href="${d.image}" download>⤓ Download PNG</a>`;
+    }).catch(e => setStatus("Failed: " + e, "err"));
+  };
+</script>
+
+</body>
+</html>

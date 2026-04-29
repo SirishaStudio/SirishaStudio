@@ -55,12 +55,28 @@ h2{ font-size:20px; }
 .back-link:hover{ color:var(--text); }
 
 /* ---------- INDEX TILES ---------- */
+.tool-section{
+  max-width:1080px;
+  margin:24px auto 14px;
+  padding:14px 16px;
+  background:rgba(255,255,255,.015);
+  border:1px solid var(--border);
+  border-radius:14px;
+}
+.tool-section-head{
+  display:flex; flex-wrap:wrap; align-items:baseline; gap:10px;
+  margin-bottom:10px; padding-bottom:8px;
+  border-bottom:1px dashed var(--border);
+}
+.tool-section-head h3{
+  margin:0; font-size:13px; letter-spacing:2px; font-weight:700;
+  color:var(--accent); text-transform:uppercase;
+}
+.tool-section-head span{ color:var(--muted); font-size:12px; }
 .tiles{
   display:grid;
   grid-template-columns:repeat(auto-fit, minmax(220px, 1fr));
-  gap:14px;
-  max-width:980px;
-  margin:24px auto 0;
+  gap:12px;
 }
 .tile{
   background:var(--panel);

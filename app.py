@@ -21,6 +21,9 @@ from tools.custom       import bp as custom_bp
 from tools.convert      import bp as convert_bp
 from tools.enhance      import bp as enhance_bp
 from tools.resume       import bp as resume_bp
+from tools.id_photo     import bp as id_photo_bp
+from tools.compress     import bp as compress_bp
+from tools.qr           import bp as qr_bp
 
 
 app = Flask(__name__)
@@ -37,24 +40,60 @@ app.register_blueprint(custom_bp)
 app.register_blueprint(convert_bp)
 app.register_blueprint(enhance_bp)
 app.register_blueprint(resume_bp)
+app.register_blueprint(id_photo_bp)
+app.register_blueprint(compress_bp)
+app.register_blueprint(qr_bp)
+
+
+# Tools grouped into sections for the home page (in display order).
+TOOL_SECTIONS = [
+    {
+        "title": "Cards",
+        "blurb": "Crop / level / print front + back of identity cards.",
+        "tools": [
+            {"href": "/short-aadhar", "title": "Short Aadhar",   "desc": "PDF → cropped front + back"},
+            {"href": "/long-aadhar",  "title": "Long Aadhar",    "desc": "Full page + paste signature tick"},
+            {"href": "/pan",          "title": "PAN",            "desc": "Single coord, photo levels"},
+            {"href": "/voter",        "title": "Voter ID",       "desc": "PDF / image → front + back"},
+            {"href": "/rc",           "title": "RC",             "desc": "2-page PDF → front + back"},
+            {"href": "/dl",           "title": "Driving Licence","desc": "2-page PDF, auto-trim borders"},
+            {"href": "/senior",       "title": "Senior Citizen", "desc": "PDF → cropped front + back"},
+        ],
+    },
+    {
+        "title": "Conversions, Enhance, Resume",
+        "blurb": "File conversions, batch image enhancement, and resume DOCX builder.",
+        "tools": [
+            {"href": "/convert", "title": "Convert",      "desc": "PDF / image / DOCX any-to-any"},
+            {"href": "/enhance", "title": "Enhance",      "desc": "Batch lighten / darken / fix dark / PDF"},
+            {"href": "/resume",  "title": "Resume Maker", "desc": "Fresher / Ordinary / Detailed → DOCX"},
+        ],
+    },
+    {
+        "title": "Studio Utilities",
+        "blurb": "Daily helpers — passport photos, file-size compression, QR codes.",
+        "tools": [
+            {"href": "/id-photo", "title": "ID Photo",  "desc": "Passport / Visa / Stamp size + A4 sheet"},
+            {"href": "/compress", "title": "Compress",  "desc": "Bring an image under a target KB"},
+            {"href": "/qr",       "title": "QR Code",   "desc": "Text / URL / UPI / Wi-Fi → PNG"},
+        ],
+    },
+    {
+        "title": "Custom",
+        "blurb": "When the card type isn't above — draw your own crops, save as preset.",
+        "tools": [
+            {"href": "/custom", "title": "Custom Card",
+             "desc": "Draw FRONT/BACK boxes, save preset"},
+        ],
+    },
+]
 
 
 @app.route("/")
 def home():
-    tools = [
-        {"href": "/short-aadhar", "title": "Short Aadhar",   "desc": "PDF → cropped front + back"},
-        {"href": "/long-aadhar",  "title": "Long Aadhar",    "desc": "Full page + paste signature tick"},
-        {"href": "/pan",          "title": "PAN",            "desc": "Old / New cards, photo levels"},
-        {"href": "/voter",        "title": "Voter ID",       "desc": "PDF / image → front + back"},
-        {"href": "/rc",           "title": "RC",             "desc": "2-page PDF → front + back"},
-        {"href": "/dl",           "title": "Driving Licence","desc": "2-page PDF → front + back"},
-        {"href": "/senior",       "title": "Senior Citizen", "desc": "PDF → cropped front + back"},
-        {"href": "/custom",       "title": "Custom Card",    "desc": "Draw FRONT/BACK boxes, save preset"},
-        {"href": "/convert",      "title": "Convert",        "desc": "PDF / image / DOCX any-to-any"},
-        {"href": "/enhance",      "title": "Enhance",        "desc": "Batch lighten / darken / fix dark / PDF"},
-        {"href": "/resume",       "title": "Resume Maker",   "desc": "Fresher / Ordinary / Detailed → DOCX"},
-    ]
-    return render_template("index.html", tools=tools, descale=GLOBAL_PRINT_DESCALE)
+    return render_template("index.html",
+                           sections=TOOL_SECTIONS,
+                           descale=GLOBAL_PRINT_DESCALE)
 
 
 @app.route("/file/<name>")

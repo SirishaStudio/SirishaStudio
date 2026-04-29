@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>ID Photo Maker — Studio</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+
+<div class="topbar">
+  <a class="back-link" href="/">← All tools</a>
+  <span class="brand">SIRISHA STUDIO</span>
+</div>
+
+<h2>ID Photo Maker</h2>
+<p style="text-align:center;color:var(--muted);font-size:12px;max-width:700px;margin:0 auto 12px">
+  Drop a portrait photo, pick a print size and DPI. We'll output a JPG sized
+  exactly to the requested mm × DPI, with a white background. Optional A4 sheet
+  for cutting multiple copies in one pass.
+</p>
+
+<div class="upload-bar">
+  <input type="file" id="file" accept=".jpg,.jpeg,.png,.webp">
+  <select id="preset" class="mode-select">
+    {% for p in presets %}
+      <option value="{{ p.w_mm }}|{{ p.h_mm }}">{{ p.label }}</option>
+    {% endfor %}
+    <option value="custom">Custom mm…</option>
+  </select>
+  <input type="number" id="dpi" value="{{ default_dpi }}" min="72" max="600" style="width:80px"
+         title="Print DPI">
+  <input type="number" id="copies" value="0" min="0" max="40" style="width:80px"
+         title="Copies on A4 sheet (0 = none)">
+  <input type="color" id="bg" value="#ffffff" title="Background color" style="width:46px;height:32px;border:1px solid var(--border);border-radius:6px;background:transparent">
+  <button class="btn primary" onclick="run()">⚙ Generate</button>
+</div>
+
+<div id="custom_dim" style="display:none;text-align:center;margin:6px">
+  <input type="number" id="w_mm" placeholder="W mm" style="width:80px">
+  <input type="number" id="h_mm" placeholder="H mm" style="width:80px">
+</div>
+
+<p id="status" style="text-align:center"></p>
+<div id="result" style="text-align:center;margin:14px;display:flex;flex-direction:column;align-items:center;gap:14px"></div>
+
+<script>
+  const $ = id => document.getElementById(id);
+
+  $("preset").addEventListener("change", () => {
+    $("custom_dim").style.display = $("preset").value === "custom" ? "block" : "none";
+  });
+
+  function setStatus(m,c=""){ $("status").innerText = m; $("status").className = c; }
+
+  window.run = function(){
+    const f = $("file").files[0];
+    if(!f){ setStatus("Pick an image first.","err"); return; }
+
+    let w_mm, h_mm;
+    if($("preset").value === "custom"){
+      w_mm = parseFloat($("w_mm").value || "0");
+      h_mm = parseFloat($("h_mm").value || "0");
+      if(!w_mm || !h_mm){ setStatus("Enter custom W and H in mm.","err"); return; }
+    } else {
+      [w_mm, h_mm] = $("preset").value.split("|").map(parseFloat);
+    }
+
+    const fd = new FormData();
+    fd.append("file", f);
+    fd.append("w_mm", w_mm);
+    fd.append("h_mm", h_mm);
+    fd.append("dpi", $("dpi").value);
+    fd.append("copies", $("copies").value);
+    fd.append("bg", $("bg").value);
+
+    setStatus("Generating…");
+    fetch("/id-photo/process", { method:"POST", body: fd })
+      .then(r => r.json()).then(d => {
+        if(d.error){ setStatus(d.error, "err"); return; }
+        setStatus(d.size, "ok");
+        let html = `
+          <div>
+            <img src="${d.image}?t=${Date.now()}" style="max-width:340px;border:1px solid var(--border);border-radius:8px;background:white">
+            <div style="margin-top:8px"><a class="btn primary" href="${d.image}" download>⤓ Download single ID photo</a></div>
+          </div>`;
+        if(d.sheet){
+          html += `
+            <div>
+              <img src="${d.sheet}?t=${Date.now()}" style="max-width:380px;border:1px solid var(--border);border-radius:8px;background:white">
+              <div style="margin-top:8px">
+                A4 sheet — ${d.sheet_count} copies
+                · <a class="btn primary" href="${d.sheet}" download>⤓ Download A4 sheet</a>
+              </div>
+            </div>`;
+        }
+        $("result").innerHTML = html;
+      }).catch(e => setStatus("Failed: " + e, "err"));
+  };
+</script>
+
+</body>
+</html>

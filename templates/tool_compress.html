@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Image Compressor — Studio</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+
+<div class="topbar">
+  <a class="back-link" href="/">← All tools</a>
+  <span class="brand">SIRISHA STUDIO</span>
+</div>
+
+<h2>Compress to Target KB</h2>
+<p style="text-align:center;color:var(--muted);font-size:12px;max-width:700px;margin:0 auto 12px">
+  For govt portals that say "image must be under 100 KB" — drop an image,
+  tell us a target size, and we binary-search the JPEG quality (and downscale
+  if needed) until it fits.
+</p>
+
+<div class="upload-bar">
+  <input type="file" id="file" accept=".jpg,.jpeg,.png,.webp,.bmp">
+  <input type="number" id="target_kb" value="100" min="5" max="5000" style="width:90px"
+         title="Target size in KB">
+  <span class="conv-label">KB</span>
+  <input type="number" id="max_dim" value="0" min="0" max="6000" style="width:90px"
+         title="Cap longest side in pixels (0 = no cap)">
+  <span class="conv-label">max px</span>
+  <button class="btn primary" onclick="run()">⚙ Compress</button>
+</div>
+
+<p id="status" style="text-align:center"></p>
+<div id="result" style="text-align:center;margin:14px"></div>
+
+<script>
+  const $ = id => document.getElementById(id);
+  function setStatus(m,c=""){ $("status").innerText = m; $("status").className = c; }
+
+  window.run = function(){
+    const f = $("file").files[0];
+    if(!f){ setStatus("Pick an image first.","err"); return; }
+    const fd = new FormData();
+    fd.append("file", f);
+    fd.append("target_kb", $("target_kb").value);
+    fd.append("max_dim", $("max_dim").value);
+    setStatus("Compressing…");
+    fetch("/compress/process", { method:"POST", body: fd })
+      .then(r => r.json()).then(d => {
+        if(d.error){ setStatus(d.error, "err"); return; }
+        setStatus(`${d.size_kb} KB at JPEG quality ${d.quality}`, "ok");
+        $("result").innerHTML = `
+          <img src="${d.image}?t=${Date.now()}" style="max-width:560px;border:1px solid var(--border);border-radius:8px;background:white"><br>
+          <a class="btn primary" style="margin-top:10px" href="${d.image}" download>⤓ Download compressed JPG</a>`;
+      }).catch(e => setStatus("Failed: " + e, "err"));
+  };
+</script>
+
+</body>
+</html>

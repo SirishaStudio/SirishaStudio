@@ -7,19 +7,37 @@ print front+back on A4 (matching your offline batch printer's exact mm sizes).
 
 ## Tools
 
+The home page groups tools into **four sections**:
+
+**Cards**
 | Route           | What it does                                                  |
 |-----------------|---------------------------------------------------------------|
 | `/short-aadhar` | Aadhar PDF → cropped front/back, with PHOTO region levels     |
 | `/long-aadhar`  | Aadhar PDF → full page; paste signature screenshot overlay    |
-| `/pan`          | PAN PDF → cropped front/back. **Old / New** mode toggle       |
+| `/pan`          | PAN PDF → cropped front/back (single coord, no Old/New)       |
 | `/voter`        | Voter PDF/JPG/PNG → front/back. Two photo regions on front    |
 | `/rc`           | Vehicle RC two-page PDF → front (page 1) + back (page 2)      |
-| `/dl`           | Driving Licence two-page PDF → front (with photo) + back      |
+| `/dl`           | DL two-page PDF → front+back, **auto-trims black borders**    |
 | `/senior`       | Senior Citizen PDF → cropped front/back (500 DPI source)      |
-| `/custom`       | Draw FRONT/BACK rectangles on any uploaded card; save preset  |
+
+**Conversions, Enhance, Resume**
+| Route           | What it does                                                  |
+|-----------------|---------------------------------------------------------------|
 | `/convert`      | PDF↔JPG/DOCX, image format swaps, images→one PDF or each→PDF  |
 | `/enhance`      | Multi-image batch: lighten/darken/whiten/dark-fix; print PDF  |
-| `/resume`       | Fresher / Ordinary / Detailed templates → filled DOCX         |
+| `/resume`       | Fresher (1-page) / Ordinary / Detailed templates → DOCX       |
+
+**Studio Utilities**
+| Route           | What it does                                                  |
+|-----------------|---------------------------------------------------------------|
+| `/id-photo`     | Passport / Visa / Stamp size photos + A4 sheet print          |
+| `/compress`     | Bring an image under a target KB (binary-search JPEG quality) |
+| `/qr`           | Text / URL / UPI / Wi-Fi → printable PNG QR code              |
+
+**Custom**
+| Route           | What it does                                                  |
+|-----------------|---------------------------------------------------------------|
+| `/custom`       | Draw FRONT/BACK rectangles on any uploaded card; save preset  |
 
 ## Important behaviours
 
@@ -38,13 +56,18 @@ print front+back on A4 (matching your offline batch printer's exact mm sizes).
   - View / clear saved overrides
   - "Save current sliders as default" -> persists `levels` for that tool
   - "Pick on FRONT/BACK/IMAGE" -> drag a rectangle, get exact canvas-pixel
-    coords, save as `photo_region`. Useful when sending coords to the agent.
+    coords, save as `photo_region` (front) or `back_photo_region` (back).
+  - On **DL**, an extra panel exposes the black-border auto-trim controls
+    (enable, threshold, inner pad, max-trim %) plus 4 manual trim values,
+    saved straight to overrides.
 
 ## Stack
 
-- **Language:** Python 3.12
+- **Language:** Python 3.11
 - **Framework:** Flask (dev server in dev, gunicorn in prod)
-- **Image:** OpenCV (`opencv-python-headless`), `pdf2image`, `numpy`
+- **Image:** OpenCV (`opencv-python-headless`), `pdf2image`, `pymupdf`, `pillow-heif`, `numpy`
+- **DOCX:** `python-docx` (resume builder writes from scratch — no template substitution)
+- **QR:** `qrcode[pil]`
 - **System dep:** `poppler` (required by `pdf2image`)
 
 ## Project Layout
@@ -57,11 +80,18 @@ tools/
   utils.py                # shared helpers + overrides loader
   aadhar_short.py         # /short-aadhar
   aadhar_long.py          # /long-aadhar
-  pan.py                  # /pan          (Old/New toggle)
+  pan.py                  # /pan          (single coord)
   voter.py                # /voter        (2 photo regions)
   rc.py                   # /rc           (corner print)
-  dl.py                   # /dl           (photo region)
+  dl.py                   # /dl           (auto + manual border trim)
   senior.py               # /senior
+  custom.py               # /custom       (CISF baked as default preset)
+  convert.py              # /convert
+  enhance.py              # /enhance
+  resume.py               # /resume       (3 templates, all built from scratch)
+  id_photo.py             # /id-photo
+  compress.py             # /compress
+  qr.py                   # /qr
 templates/
   index.html              # tile picker
   tool_dual.html          # shared two-canvas UI

@@ -17,12 +17,32 @@ DPI = 300                                  # lighter than card tools — for spe
 LEVELS = {"g_black": 0, "g_gamma": 1.0, "p_white": 255, "p_gamma": 1.0}
 PRINT_SCALE = 1.00
 
+# Built-in presets that ship with the app — user-created presets are added on
+# top via overrides.json.
+DEFAULT_PRESETS = [
+    {
+        "name": "cisf",
+        "dpi": 300,
+        "front": {"x": 15, "y": 23, "w": 979, "h": 598},
+        "back":  None,
+        "levels": {"g_black": 0, "g_gamma": 1.0},
+        "saved_at": 1777380357,
+        "builtin": True,
+    },
+]
+
 
 def _cfg():
-    return utils.merged(TOOL_KEY, {
+    cfg = utils.merged(TOOL_KEY, {
         "levels": LEVELS, "print_scale": PRINT_SCALE, "dpi": DPI,
         "presets": [],
     })
+    # Merge built-in presets in front, but never duplicate names from overrides
+    user_presets = list(cfg.get("presets") or [])
+    user_names = {p.get("name") for p in user_presets}
+    merged_presets = [p for p in DEFAULT_PRESETS if p.get("name") not in user_names] + user_presets
+    cfg["presets"] = merged_presets
+    return cfg
 
 
 @bp.route("/custom")
@@ -113,6 +133,7 @@ def preset():
 
     if request.method == "DELETE":
         name = request.args.get("name", "")
+        # Don't allow deleting built-ins (they re-merge from defaults anyway)
         presets = [p for p in presets if p.get("name") != name]
     else:
         body = request.get_json(silent=True) or {}
@@ -132,4 +153,7 @@ def preset():
     cur["presets"] = presets
     data[TOOL_KEY] = cur
     utils.save_overrides(data)
-    return jsonify({"ok": True, "presets": presets})
+    # Return merged list (built-ins + user) so the UI shows everything
+    user_names = {p.get("name") for p in presets}
+    merged_presets = [p for p in DEFAULT_PRESETS if p.get("name") not in user_names] + presets
+    return jsonify({"ok": True, "presets": merged_presets})
