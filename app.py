@@ -24,6 +24,7 @@ from tools.resume       import bp as resume_bp
 from tools.id_photo     import bp as id_photo_bp
 from tools.compress     import bp as compress_bp
 from tools.qr           import bp as qr_bp
+from tools.pan_profile  import bp as pan_profile_bp
 
 
 app = Flask(__name__)
@@ -43,6 +44,7 @@ app.register_blueprint(resume_bp)
 app.register_blueprint(id_photo_bp)
 app.register_blueprint(compress_bp)
 app.register_blueprint(qr_bp)
+app.register_blueprint(pan_profile_bp)
 
 
 # Tools grouped into sections for the home page (in display order).
@@ -51,13 +53,21 @@ TOOL_SECTIONS = [
         "title": "Cards",
         "blurb": "Crop / level / print front + back of identity cards.",
         "tools": [
-            {"href": "/short-aadhar", "title": "Short Aadhar",   "desc": "PDF → cropped front + back"},
-            {"href": "/long-aadhar",  "title": "Long Aadhar",    "desc": "Full page + paste signature tick"},
-            {"href": "/pan",          "title": "PAN",            "desc": "Old / New PAN modes, separate photo zones"},
-            {"href": "/voter",        "title": "Voter ID",       "desc": "PDF / image → front + back"},
-            {"href": "/rc",           "title": "RC",             "desc": "2-page PDF → front + back"},
-            {"href": "/dl",           "title": "Driving Licence","desc": "2-page PDF, auto-trim borders"},
-            {"href": "/senior",       "title": "Senior Citizen", "desc": "PDF → cropped front + back"},
+            {"href": "/short-aadhar",  "title": "Short Aadhar",    "desc": "PDF → cropped front + back"},
+            {"href": "/long-aadhar",   "title": "Long Aadhar",     "desc": "Full page + paste signature tick"},
+            {"href": "/pan",           "title": "PAN Card",        "desc": "Old / New PAN modes, separate photo zones"},
+            {"href": "/voter",         "title": "Voter ID",        "desc": "PDF / image → front + back"},
+            {"href": "/rc",            "title": "RC",              "desc": "2-page PDF → front + back"},
+            {"href": "/dl",            "title": "Driving Licence", "desc": "2-page PDF, auto-trim borders"},
+            {"href": "/senior",        "title": "Senior Citizen",  "desc": "PDF → cropped front + back"},
+        ],
+    },
+    {
+        "title": "PAN Application",
+        "blurb": "Store applicant data once, copy to the PAN website anytime. Convert photo / signature / document to PAN specs.",
+        "tools": [
+            {"href": "/pan-profile", "title": "PAN Profile & Converters",
+             "desc": "Applicant data storage · Photo / Signature / Document converter"},
         ],
     },
     {
@@ -65,8 +75,8 @@ TOOL_SECTIONS = [
         "blurb": "File conversions, batch image enhancement, and resume DOCX builder.",
         "tools": [
             {"href": "/convert", "title": "Convert",      "desc": "PDF / image / DOCX any-to-any"},
-            {"href": "/enhance", "title": "Enhance",      "desc": "Batch lighten / darken / fix dark / PDF"},
-            {"href": "/resume",  "title": "Resume Maker", "desc": "Fresher / Ordinary / Detailed → DOCX"},
+            {"href": "/enhance", "title": "Enhance",      "desc": "Batch lighten / darken / fix dark / PDF · Downloads folder monitor"},
+            {"href": "/resume",  "title": "Resume Maker", "desc": "Fresher / Ordinary templates with section control → DOCX"},
         ],
     },
     {

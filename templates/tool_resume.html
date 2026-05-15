@@ -4,29 +4,16 @@
 <meta charset="UTF-8">
 <title>Resume Maker — Studio</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+<script src="{{ url_for('static', filename='js/theme.js') }}"></script>
 <style>
-  .row-list{ display:flex; flex-direction:column; gap:6px; margin-bottom:8px; }
-  .row-item{
-    display:grid; gap:6px; align-items:center;
-    background:rgba(255,255,255,.02);
-    border:1px solid var(--border); border-radius:8px; padding:6px 8px;
-  }
-  .row-item .del{
-    background:transparent; border:1px solid var(--danger); color:var(--danger);
-    border-radius:6px; padding:3px 8px; font-size:11px; cursor:pointer;
-  }
-  .row-item .del:hover{ background:rgba(239,68,68,.1); }
-  .row-item.cols-edu{ grid-template-columns:1.1fr 1.6fr 1.3fr 0.8fr 0.8fr 36px; }
-  .row-item.cols-fresh-edu{ grid-template-columns:1fr 2fr 0.8fr 36px; }
-  .row-item.cols-bullet{ grid-template-columns:1fr 36px; }
-  .row-item.cols-skill{ grid-template-columns:1fr 1.5fr 36px; }
-  .add-btn{
-    background:var(--panel-2); border:1px dashed var(--accent); color:var(--accent);
-    border-radius:8px; padding:5px 10px; font-size:12px; cursor:pointer;
-    margin-bottom:6px;
-  }
-  .add-btn:hover{ background:rgba(59,130,246,.08); }
-  .resume-form input, .resume-form textarea{ font-size:12px; padding:5px 8px; }
+  .tpl-preview svg { width:100%; height:100%; display:block; }
+  .section-body { display:none; }
+  .section-body.open { display:block; }
+  .edu-select-row { display:flex; gap:6px; align-items:center; }
+  .edu-select-row select { flex:0 0 160px; background:var(--input-bg); border:1px solid var(--border); color:var(--text); border-radius:6px; padding:5px 8px; font-size:12px; }
+  .edu-select-row input { flex:1; }
+  .resume-form input, .resume-form textarea, .resume-form select { font-size:12px; padding:5px 8px; }
+  .group-label { text-align:center; font-size:11px; color:var(--muted); letter-spacing:1px; font-weight:600; text-transform:uppercase; margin-bottom:8px; }
 </style>
 </head>
 <body>
@@ -34,38 +21,211 @@
 <div class="topbar">
   <a class="back-link" href="/">← All tools</a>
   <span class="brand">SIRISHA STUDIO</span>
+  <button class="theme-toggle" id="theme_btn" onclick="toggleTheme()">🌙 Dark</button>
 </div>
 
 <h2>Resume Maker</h2>
-
-<p style="text-align:center;color:var(--muted);max-width:760px;margin:0 auto 12px;font-size:12px">
-  Pick a template first, then fill what you have. Anything you leave blank is left out of the file.
-  Use the <b>+ Add</b> buttons to add as many rows as you need; <b>×</b> removes one.
+<p style="text-align:center;color:var(--muted);max-width:760px;margin:0 auto 16px;font-size:12px">
+  Pick a template style, fill what you have, tick/untick sections. Blank fields are skipped.
 </p>
 
-<div class="resume-pick" id="picker">
-  {% for k, t in templates.items() %}
-    <div class="resume-card" data-key="{{ k }}" onclick="pickTemplate('{{ k }}')">
-      <h3>{{ t.label }}</h3>
-      <p>{{ t.blurb }}</p>
-    </div>
-  {% endfor %}
-</div>
+<!-- ===== TEMPLATE PICKER ===== -->
+<div id="picker" class="resume-pick">
 
+  <!-- FRESHER group -->
+  <div class="resume-type-group">
+    <h3>🎓 Fresher Resume</h3>
+    <div class="resume-variants">
+
+      <div class="resume-card" data-key="fresher_a" onclick="pickTemplate('fresher_a')">
+        <div class="tpl-preview">
+          <svg viewBox="0 0 120 170" xmlns="http://www.w3.org/2000/svg">
+            <rect width="120" height="170" fill="#fff" rx="3"/>
+            <!-- RESUME header -->
+            <rect x="35" y="8" width="50" height="6" rx="2" fill="#4472f5" opacity=".85"/>
+            <!-- name line -->
+            <rect x="15" y="20" width="60" height="4" rx="1.5" fill="#1a2240" opacity=".7"/>
+            <rect x="15" y="27" width="40" height="3" rx="1.5" fill="#999" opacity=".5"/>
+            <rect x="15" y="32" width="55" height="2" rx="1" fill="#bbb" opacity=".4"/>
+            <!-- hr -->
+            <line x1="10" y1="40" x2="110" y2="40" stroke="#4472f5" stroke-width="1"/>
+            <!-- objective -->
+            <rect x="10" y="45" width="35" height="3" rx="1" fill="#4472f5" opacity=".6"/>
+            <rect x="10" y="51" width="100" height="2" rx="1" fill="#ccc" opacity=".5"/>
+            <rect x="10" y="55" width="90" height="2" rx="1" fill="#ccc" opacity=".4"/>
+            <!-- qualifications -->
+            <rect x="10" y="63" width="55" height="3" rx="1" fill="#4472f5" opacity=".6"/>
+            <rect x="10" y="69" width="95" height="2" rx="1" fill="#ccc" opacity=".4"/>
+            <rect x="10" y="73" width="85" height="2" rx="1" fill="#ccc" opacity=".4"/>
+            <rect x="10" y="77" width="90" height="2" rx="1" fill="#ccc" opacity=".4"/>
+            <!-- experience -->
+            <rect x="10" y="85" width="40" height="3" rx="1" fill="#4472f5" opacity=".6"/>
+            <rect x="10" y="91" width="30" height="2" rx="1" fill="#ccc" opacity=".4"/>
+            <!-- profile -->
+            <rect x="10" y="99" width="45" height="3" rx="1" fill="#4472f5" opacity=".6"/>
+            <rect x="10" y="105" width="70" height="2" rx="1" fill="#ccc" opacity=".4"/>
+            <rect x="10" y="109" width="60" height="2" rx="1" fill="#ccc" opacity=".4"/>
+            <rect x="10" y="113" width="65" height="2" rx="1" fill="#ccc" opacity=".4"/>
+            <!-- declaration -->
+            <rect x="10" y="121" width="40" height="3" rx="1" fill="#4472f5" opacity=".6"/>
+            <rect x="10" y="127" width="95" height="2" rx="1" fill="#ccc" opacity=".4"/>
+            <rect x="80" y="140" width="30" height="2" rx="1" fill="#ccc" opacity=".4"/>
+          </svg>
+        </div>
+        <h4>Classic</h4>
+        <p>Bold name, list quals, personal profile</p>
+      </div>
+
+      <div class="resume-card" data-key="fresher_b" onclick="pickTemplate('fresher_b')">
+        <div class="tpl-preview">
+          <svg viewBox="0 0 120 170" xmlns="http://www.w3.org/2000/svg">
+            <rect width="120" height="170" fill="#fff" rx="3"/>
+            <!-- Large centered name -->
+            <rect x="20" y="8" width="80" height="7" rx="2.5" fill="#1a2240" opacity=".8"/>
+            <!-- contact line centered -->
+            <rect x="30" y="18" width="60" height="3" rx="1.5" fill="#4472f5" opacity=".4"/>
+            <rect x="40" y="23" width="40" height="2" rx="1" fill="#bbb" opacity=".4"/>
+            <!-- hr -->
+            <line x1="10" y1="29" x2="110" y2="29" stroke="#4472f5" stroke-width="1"/>
+            <!-- objective -->
+            <rect x="10" y="34" width="35" height="3" rx="1" fill="#4472f5" opacity=".6"/>
+            <rect x="10" y="40" width="100" height="2" rx="1" fill="#ccc" opacity=".5"/>
+            <rect x="10" y="44" width="85" height="2" rx="1" fill="#ccc" opacity=".4"/>
+            <!-- table header -->
+            <rect x="10" y="52" width="40" height="3" rx="1" fill="#4472f5" opacity=".6"/>
+            <rect x="10" y="58" width="100" height="8" rx="1" fill="#DCE6F1" opacity=".7"/>
+            <rect x="10" y="67" width="100" height="6" rx="1" fill="#eef1ff" opacity=".6"/>
+            <rect x="10" y="74" width="100" height="6" rx="1" fill="#f5f7ff" opacity=".5"/>
+            <rect x="10" y="81" width="100" height="6" rx="1" fill="#eef1ff" opacity=".4"/>
+            <!-- profile -->
+            <rect x="10" y="92" width="45" height="3" rx="1" fill="#4472f5" opacity=".6"/>
+            <rect x="10" y="98" width="70" height="2" rx="1" fill="#ccc" opacity=".4"/>
+            <rect x="10" y="102" width="60" height="2" rx="1" fill="#ccc" opacity=".4"/>
+            <!-- declaration -->
+            <rect x="10" y="112" width="40" height="3" rx="1" fill="#4472f5" opacity=".6"/>
+            <rect x="10" y="118" width="95" height="2" rx="1" fill="#ccc" opacity=".4"/>
+            <rect x="80" y="130" width="30" height="2" rx="1" fill="#ccc" opacity=".4"/>
+          </svg>
+        </div>
+        <h4>Compact</h4>
+        <p>Centered name, tabular qualifications</p>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ORDINARY group -->
+  <div class="resume-type-group">
+    <h3>💼 Ordinary Resume</h3>
+    <div class="resume-variants">
+
+      <div class="resume-card" data-key="ordinary_a" onclick="pickTemplate('ordinary_a')">
+        <div class="tpl-preview">
+          <svg viewBox="0 0 120 170" xmlns="http://www.w3.org/2000/svg">
+            <rect width="120" height="170" fill="#fff" rx="3"/>
+            <!-- RESUME centered -->
+            <rect x="40" y="5" width="40" height="5" rx="2" fill="#4472f5" opacity=".8"/>
+            <!-- header table: name left, contact right -->
+            <rect x="5"  y="14" width="60" height="6" rx="2" fill="#1a2240" opacity=".7"/>
+            <rect x="75" y="14" width="40" height="3" rx="1" fill="#bbb" opacity=".5"/>
+            <rect x="5"  y="22" width="45" height="2" rx="1" fill="#bbb" opacity=".4"/>
+            <rect x="75" y="19" width="35" height="2" rx="1" fill="#bbb" opacity=".4"/>
+            <!-- hr -->
+            <line x1="5" y1="28" x2="115" y2="28" stroke="#4472f5" stroke-width="1"/>
+            <!-- objective -->
+            <rect x="5" y="32" width="35" height="3" rx="1" fill="#4472f5" opacity=".6"/>
+            <rect x="5" y="38" width="110" height="2" rx="1" fill="#ccc" opacity=".4"/>
+            <rect x="5" y="42" width="95" height="2" rx="1" fill="#ccc" opacity=".4"/>
+            <!-- edu table -->
+            <rect x="5" y="50" width="50" height="3" rx="1" fill="#4472f5" opacity=".6"/>
+            <rect x="5" y="56" width="110" height="7" rx="1" fill="#DCE6F1" opacity=".7"/>
+            <rect x="5" y="64" width="110" height="6" rx="1" fill="#eef1ff" opacity=".5"/>
+            <rect x="5" y="71" width="110" height="6" rx="1" fill="#f5f7ff" opacity=".4"/>
+            <!-- experience -->
+            <rect x="5" y="82" width="35" height="3" rx="1" fill="#4472f5" opacity=".6"/>
+            <rect x="8" y="88" width="95" height="2" rx="1" fill="#ccc" opacity=".4"/>
+            <!-- strengths -->
+            <rect x="5" y="96" width="30" height="3" rx="1" fill="#4472f5" opacity=".6"/>
+            <rect x="8" y="102" width="80" height="2" rx="1" fill="#ccc" opacity=".4"/>
+            <rect x="8" y="106" width="70" height="2" rx="1" fill="#ccc" opacity=".4"/>
+            <!-- profile -->
+            <rect x="5" y="114" width="40" height="3" rx="1" fill="#4472f5" opacity=".6"/>
+            <rect x="5" y="120" width="70" height="2" rx="1" fill="#ccc" opacity=".4"/>
+            <rect x="5" y="124" width="60" height="2" rx="1" fill="#ccc" opacity=".4"/>
+            <rect x="5" y="128" width="65" height="2" rx="1" fill="#ccc" opacity=".4"/>
+            <!-- declaration -->
+            <rect x="5" y="136" width="40" height="3" rx="1" fill="#4472f5" opacity=".5"/>
+            <rect x="5" y="142" width="100" height="2" rx="1" fill="#ccc" opacity=".35"/>
+            <rect x="80" y="154" width="30" height="2" rx="1" fill="#ccc" opacity=".35"/>
+          </svg>
+        </div>
+        <h4>Professional</h4>
+        <p>Header table, 5-col edu, strengths</p>
+      </div>
+
+      <div class="resume-card" data-key="ordinary_b" onclick="pickTemplate('ordinary_b')">
+        <div class="tpl-preview">
+          <svg viewBox="0 0 120 170" xmlns="http://www.w3.org/2000/svg">
+            <rect width="120" height="170" fill="#fff" rx="3"/>
+            <!-- RESUME centered -->
+            <rect x="40" y="5" width="40" height="5" rx="2" fill="#4472f5" opacity=".8"/>
+            <!-- Large name left -->
+            <rect x="5" y="14" width="70" height="7" rx="2.5" fill="#1a2240" opacity=".75"/>
+            <!-- email right -->
+            <rect x="80" y="15" width="35" height="2.5" rx="1" fill="#bbb" opacity=".5"/>
+            <rect x="80" y="20" width="30" height="2.5" rx="1" fill="#bbb" opacity=".4"/>
+            <!-- objective -->
+            <rect x="5" y="28" width="35" height="3" rx="1" fill="#4472f5" opacity=".6"/>
+            <rect x="5" y="34" width="110" height="2" rx="1" fill="#ccc" opacity=".4"/>
+            <!-- edu 5-col -->
+            <rect x="5" y="42" width="55" height="3" rx="1" fill="#4472f5" opacity=".6"/>
+            <rect x="5" y="48" width="110" height="6" rx="1" fill="#DCE6F1" opacity=".7"/>
+            <rect x="5" y="55" width="110" height="5" rx="1" fill="#eef1ff" opacity=".5"/>
+            <rect x="5" y="61" width="110" height="5" rx="1" fill="#f5f7ff" opacity=".4"/>
+            <!-- work exp -->
+            <rect x="5" y="72" width="40" height="3" rx="1" fill="#4472f5" opacity=".6"/>
+            <rect x="8" y="78" width="90" height="2" rx="1" fill="#ccc" opacity=".4"/>
+            <!-- tech skills -->
+            <rect x="5" y="86" width="45" height="3" rx="1" fill="#4472f5" opacity=".6"/>
+            <rect x="8" y="92" width="100" height="2" rx="1" fill="#ccc" opacity=".4"/>
+            <rect x="8" y="96" width="90" height="2" rx="1" fill="#ccc" opacity=".4"/>
+            <!-- strengths -->
+            <rect x="5" y="104" width="30" height="3" rx="1" fill="#4472f5" opacity=".6"/>
+            <rect x="8" y="110" width="80" height="2" rx="1" fill="#ccc" opacity=".4"/>
+            <!-- personal -->
+            <rect x="5" y="118" width="40" height="3" rx="1" fill="#4472f5" opacity=".6"/>
+            <rect x="5" y="124" width="65" height="2" rx="1" fill="#ccc" opacity=".4"/>
+            <rect x="5" y="128" width="55" height="2" rx="1" fill="#ccc" opacity=".4"/>
+            <rect x="5" y="132" width="60" height="2" rx="1" fill="#ccc" opacity=".4"/>
+            <!-- declaration -->
+            <rect x="5" y="142" width="40" height="3" rx="1" fill="#4472f5" opacity=".5"/>
+            <rect x="80" y="160" width="30" height="2" rx="1" fill="#ccc" opacity=".35"/>
+          </svg>
+        </div>
+        <h4>Detailed</h4>
+        <p>Large name, tech skills, full details</p>
+      </div>
+
+    </div>
+  </div>
+
+</div><!-- end picker -->
+
+<!-- ===== FORM ===== -->
 <form id="form" class="resume-form" style="display:none" onsubmit="event.preventDefault();build();">
 
   <fieldset>
     <legend>WHO YOU ARE</legend>
     <div class="grid2">
-      <div><label>Full name</label><input id="f_name"></div>
-      <div><label>Father's name</label><input id="f_father"></div>
+      <div><label>Full name *</label><input id="f_name" placeholder="e.g. Sai Priya Reddy"></div>
+      <div><label>Father's / Husband's name</label><input id="f_father"></div>
       <div><label>Date of Birth</label><input id="f_dob" placeholder="DD-MM-YYYY"></div>
-      <div><label>Gender</label><input id="f_gender"></div>
+      <div><label>Gender</label><input id="f_gender" placeholder="Female / Male"></div>
       <div><label>Nationality</label><input id="f_nationality" placeholder="Indian"></div>
-      <div><label>Marital status</label><input id="f_marital" placeholder="Unmarried / Single / Married"></div>
+      <div><label>Marital Status</label><input id="f_marital" placeholder="Single / Married"></div>
       <div class="row-religion" style="display:none"><label>Religion</label><input id="f_religion"></div>
-      <div><label>Languages known</label><input id="f_languages" placeholder="Telugu, English"></div>
-      <div style="grid-column:1/-1"><label>Hobbies</label><input id="f_hobbies" placeholder="Cricket, Reading"></div>
+      <div><label>Languages Known</label><input id="f_languages" placeholder="Telugu, English"></div>
+      <div style="grid-column:1/-1"><label>Hobbies</label><input id="f_hobbies" placeholder="Reading, Cricket"></div>
     </div>
   </fieldset>
 
@@ -80,47 +240,53 @@
     </div>
   </fieldset>
 
-  <fieldset>
+  <!-- SECTIONS TOGGLES -->
+  <fieldset id="fs_sections">
+    <legend>SECTIONS — uncheck to remove from document</legend>
+    <div id="section_toggles" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
+  </fieldset>
+
+  <!-- CAREER OBJECTIVE -->
+  <fieldset id="fs_obj">
     <legend>CAREER OBJECTIVE</legend>
     <textarea id="f_objective" placeholder="Leave blank for a sensible default."></textarea>
   </fieldset>
 
   <!-- FRESHER: simple qualification list -->
   <fieldset id="fs_fresher_edu" style="display:none">
-    <legend>ACADEMIC QUALIFICATIONS  —  add any you completed</legend>
-    <p class="dev-hint">Examples: SSC, Diploma, Inter, B.Tech, Degree, P.G. — add as many rows as needed.</p>
+    <legend>ACADEMIC QUALIFICATIONS</legend>
+    <p class="dev-hint">Select from common options or type a custom one.</p>
     <div id="fresh_edu_rows" class="row-list"></div>
     <button type="button" class="add-btn" onclick="addFreshEdu()">+ Add qualification</button>
   </fieldset>
 
-  <!-- ORDINARY / DETAILED: 5-col education table -->
+  <!-- ORDINARY: 5-col education table -->
   <fieldset id="fs_edu_table" style="display:none">
-    <legend id="fs_edu_legend">EDUCATION TABLE</legend>
+    <legend id="fs_edu_legend">EDUCATIONAL QUALIFICATION</legend>
     <div id="edu_rows" class="row-list"></div>
     <button type="button" class="add-btn" onclick="addEduRow()">+ Add row</button>
   </fieldset>
 
-  <!-- ORDINARY / DETAILED: experience -->
+  <!-- EXPERIENCE -->
   <fieldset id="fs_experience" style="display:none">
-    <legend>WORK EXPERIENCE  —  leave empty if you have none</legend>
-    <p class="dev-hint">Each row is one bullet on the resume. Nothing is pre-filled.</p>
+    <legend>WORK EXPERIENCE  —  leave empty if fresher</legend>
     <div id="exp_rows" class="row-list"></div>
-    <button type="button" class="add-btn" onclick="addExpRow()">+ Add experience entry</button>
+    <button type="button" class="add-btn" onclick="addExpRow()">+ Add experience</button>
   </fieldset>
 
-  <!-- ORDINARY / DETAILED: strengths -->
-  <fieldset id="fs_strengths" style="display:none">
-    <legend>STRENGTHS</legend>
-    <div id="str_rows" class="row-list"></div>
-    <button type="button" class="add-btn" onclick="addStrRow()">+ Add strength</button>
-  </fieldset>
-
-  <!-- DETAILED ONLY: technical skills -->
+  <!-- TECHNICAL SKILLS (ordinary_b only) -->
   <fieldset id="fs_skills" style="display:none">
     <legend>TECHNICAL SKILLS</legend>
     <p class="dev-hint">Label : Value — e.g. <i>Office Suite : MS Office</i></p>
     <div id="skill_rows" class="row-list"></div>
     <button type="button" class="add-btn" onclick="addSkillRow()">+ Add skill</button>
+  </fieldset>
+
+  <!-- STRENGTHS -->
+  <fieldset id="fs_strengths" style="display:none">
+    <legend>STRENGTHS</legend>
+    <div id="str_rows" class="row-list"></div>
+    <button type="button" class="add-btn" onclick="addStrRow()">+ Add strength</button>
   </fieldset>
 
   <fieldset>
@@ -131,189 +297,349 @@
     </div>
   </fieldset>
 
-  <div style="text-align:center;margin:14px 0">
+  <div style="text-align:center;margin:16px 0;display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
     <button type="submit" class="btn primary">⚙ Generate DOCX</button>
     <button type="button" class="btn" onclick="resetPicker()">← Change template</button>
+    <button type="button" class="btn dev" onclick="toggleResumeDevPanel()">DEV</button>
   </div>
 </form>
 
 <p id="status" style="text-align:center"></p>
 <div id="result" style="text-align:center;margin:12px"></div>
 
+<!-- DEV PANEL -->
+<div id="resume_dev_panel" class="dev-panel" style="display:none">
+  <div class="dev-head">
+    ⚙ RESUME DEV TOOLS
+    <button class="x" onclick="document.getElementById('resume_dev_panel').style.display='none'">×</button>
+  </div>
+  <div class="dev-body">
+    <div class="dev-section">
+      <div class="dev-title">EDUCATION QUALIFICATION OPTIONS</div>
+      <p class="dev-hint">These appear in the dropdown when adding qualifications. Edit and save.</p>
+      <div id="edu_opt_list" class="dev-list"></div>
+      <div class="dev-input-row">
+        <input id="edu_opt_new" placeholder="New option e.g. B.Pharmacy">
+        <button onclick="devAddEduOption()">Add</button>
+      </div>
+      <div class="dev-actions" style="margin-top:8px">
+        <button class="btn primary" onclick="devSaveEduOptions()">💾 Save options</button>
+        <span id="edu_opt_msg" class="dev-msg"></span>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
-  const $ = id => document.getElementById(id);
-  let template = null;
+const $ = id => document.getElementById(id);
+let template = null;
 
-  function setStatus(m, c=""){ $("status").innerText = m; $("status").className = c; }
+// Education options from server
+let EDU_OPTIONS = {{ edu_options | tojson }};
 
-  // -------- template picker --------
-  window.pickTemplate = function(k){
-    template = k;
-    document.querySelectorAll(".resume-card").forEach(el =>
-      el.classList.toggle("sel", el.dataset.key === k));
-    $("form").style.display = "block";
+function setStatus(m, c=""){ $("status").innerText = m; $("status").className = c; }
 
-    const isFresher  = (k === "fresher");
-    const isOrdinary = (k === "ordinary");
-    const isDetailed = (k === "detailed");
+// -------- section definitions --------
+const ALL_SECTIONS = {
+  fresher_a:  ["objective","qualifications","experience","profile","declaration"],
+  fresher_b:  ["objective","qualifications","experience","profile","declaration"],
+  ordinary_a: ["objective","education","experience","strengths","profile","declaration"],
+  ordinary_b: ["objective","education","experience","skills","strengths","profile","declaration"],
+};
+const SECTION_LABELS = {
+  objective:"Career Objective", qualifications:"Qualifications",
+  education:"Education Table", experience:"Work Experience",
+  skills:"Technical Skills", strengths:"Strengths",
+  profile:"Personal Profile", declaration:"Declaration",
+};
 
-    $("fs_fresher_edu").style.display = isFresher ? "" : "none";
-    $("fs_edu_table"  ).style.display = isFresher ? "none" : "";
-    $("fs_experience" ).style.display = isFresher ? "none" : "";
-    $("fs_strengths"  ).style.display = isFresher ? "none" : "";
-    $("fs_skills"     ).style.display = isDetailed ? "" : "none";
+function buildSectionToggles(tpl){
+  const container = $("section_toggles");
+  container.innerHTML = "";
+  (ALL_SECTIONS[tpl] || []).forEach(key => {
+    const lbl = document.createElement("label");
+    lbl.className = "section-toggle";
+    lbl.innerHTML = `
+      <input type="checkbox" id="sec_${key}" checked>
+      <span>${SECTION_LABELS[key] || key}</span>`;
+    container.appendChild(lbl);
+    // Toggle visibility of corresponding fieldset when unchecked
+    const el = $("sec_"+key);
+    if(el) el.addEventListener("change", () => syncSectionVis(tpl));
+  });
+}
 
-    document.querySelectorAll(".row-religion").forEach(el =>
-      el.style.display = isDetailed ? "" : "none");
+function syncSectionVis(tpl){
+  // Not hiding fieldsets — just visual indicator; actual skip is server-side via enabled_sections
+}
 
-    // Set legend to match template-specific column meaning
-    $("fs_edu_legend").innerText = isDetailed
-      ? "EDUCATIONAL QUALIFICATION  (5 columns — add / delete rows freely)"
-      : "EDUCATIONAL QUALIFICATION  (5 columns)";
+function getEnabledSections(){
+  const obj = {};
+  document.querySelectorAll("#section_toggles input[type=checkbox]").forEach(el => {
+    const key = el.id.replace("sec_","");
+    obj[key] = el.checked;
+  });
+  return obj;
+}
 
-    // Seed with one editable row of each list-section if empty
-    if(isFresher && !$("fresh_edu_rows").children.length){
-      addFreshEdu(); addFreshEdu(); addFreshEdu();
-    }
-    if(!isFresher && !$("edu_rows").children.length){
-      addEduRow(); addEduRow();
-    }
-    if(!isFresher && !$("exp_rows").children.length){
-      addExpRow();
-    }
-    if(!isFresher && !$("str_rows").children.length){
-      addStrRow(); addStrRow();
-    }
-    if(isDetailed && !$("skill_rows").children.length){
-      addSkillRow(); addSkillRow();
-    }
+// -------- template picker --------
+window.pickTemplate = function(k){
+  template = k;
+  document.querySelectorAll(".resume-card").forEach(el =>
+    el.classList.toggle("sel", el.dataset.key === k));
+  $("form").style.display = "block";
 
-    window.scrollTo({ top: $("form").offsetTop - 30, behavior: "smooth" });
-  };
+  const isFresher  = k.startsWith("fresher");
+  const isOrdinary = k.startsWith("ordinary");
+  const isOrdB     = (k === "ordinary_b");
 
-  window.resetPicker = function(){
-    template = null;
-    $("form").style.display = "none";
-    document.querySelectorAll(".resume-card").forEach(el => el.classList.remove("sel"));
-    setStatus("");
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  };
+  $("fs_fresher_edu").style.display = isFresher ? "" : "none";
+  $("fs_edu_table"  ).style.display = isOrdinary ? "" : "none";
+  $("fs_experience" ).style.display = isOrdinary ? "" : "none";
+  $("fs_strengths"  ).style.display = isOrdinary ? "" : "none";
+  $("fs_skills"     ).style.display = isOrdB ? "" : "none";
 
-  // -------- generic row helpers --------
-  function delBtn(el){
-    const b = document.createElement("button");
-    b.type = "button"; b.className = "del"; b.innerText = "×";
-    b.title = "Delete this row";
-    b.onclick = () => el.remove();
-    return b;
+  document.querySelectorAll(".row-religion").forEach(el =>
+    el.style.display = isOrdB ? "" : "none");
+
+  buildSectionToggles(k);
+
+  $("fs_edu_legend").innerText = isOrdB
+    ? "EDUCATIONAL QUALIFICATION  (5 columns)"
+    : "EDUCATIONAL QUALIFICATION  (5 columns)";
+
+  // Seed rows
+  if(isFresher && !$("fresh_edu_rows").children.length){
+    addFreshEdu(); addFreshEdu(); addFreshEdu();
   }
+  if(isOrdinary && !$("edu_rows").children.length){
+    addEduRow(); addEduRow();
+  }
+  if(isOrdinary && !$("exp_rows").children.length) addExpRow();
+  if(isOrdinary && !$("str_rows").children.length){ addStrRow(); addStrRow(); }
+  if(isOrdB && !$("skill_rows").children.length){ addSkillRow(); addSkillRow(); }
 
-  // -------- FRESHER qualifications --------
-  window.addFreshEdu = function(prefill = {}){
-    const div = document.createElement("div");
-    div.className = "row-item cols-fresh-edu";
-    div.innerHTML = `
-      <input data-k="course"    placeholder="Course (e.g. SSC / Inter / B.Tech / Diploma)" value="${prefill.course||""}">
-      <input data-k="institute" placeholder="Institute" value="${prefill.institute||""}">
-      <input data-k="year"      placeholder="Year" value="${prefill.year||""}">`;
-    div.appendChild(delBtn(div));
-    $("fresh_edu_rows").appendChild(div);
-  };
+  window.scrollTo({ top: $("form").offsetTop - 30, behavior:"smooth" });
+};
 
-  // -------- 5-col education --------
-  window.addEduRow = function(prefill = {}){
-    const div = document.createElement("div");
-    div.className = "row-item cols-edu";
-    const isDetailed = template === "detailed";
-    div.innerHTML = `
-      <input data-k="c1" placeholder="${isDetailed?'Qualification':'Course'}" value="${prefill.c1||""}">
-      <input data-k="c2" placeholder="${isDetailed?'University / College':'Institute'}" value="${prefill.c2||""}">
-      <input data-k="c3" placeholder="${isDetailed?'Specialization':'Board / University'}" value="${prefill.c3||""}">
-      <input data-k="c4" placeholder="${isDetailed?'% / Marks':'Year'}" value="${prefill.c4||""}">
-      <input data-k="c5" placeholder="${isDetailed?'Year':'%'}" value="${prefill.c5||""}">`;
-    div.appendChild(delBtn(div));
-    $("edu_rows").appendChild(div);
-  };
+window.resetPicker = function(){
+  template = null;
+  $("form").style.display = "none";
+  document.querySelectorAll(".resume-card").forEach(el => el.classList.remove("sel"));
+  setStatus("");
+  window.scrollTo({ top:0, behavior:"smooth" });
+};
 
-  // -------- experience bullet --------
-  window.addExpRow = function(prefill = ""){
-    const div = document.createElement("div");
-    div.className = "row-item cols-bullet";
-    div.innerHTML = `<input data-k="text" placeholder="e.g. Sales Officer at HDFC Bank, Apr 2022 to Nov 2023" value="${prefill}">`;
-    div.appendChild(delBtn(div));
-    $("exp_rows").appendChild(div);
-  };
+// -------- edu option dropdown --------
+function eduDropdown(val=""){
+  const sel = document.createElement("select");
+  sel.className = "edu-sel";
+  EDU_OPTIONS.concat(["Other (custom…)"]).forEach(opt => {
+    const o = document.createElement("option");
+    o.value = opt; o.textContent = opt;
+    sel.appendChild(o);
+  });
+  sel.value = val && EDU_OPTIONS.includes(val) ? val : (val ? "Other (custom…)" : EDU_OPTIONS[0]);
+  return sel;
+}
 
-  // -------- strength bullet --------
-  window.addStrRow = function(prefill = ""){
-    const div = document.createElement("div");
-    div.className = "row-item cols-bullet";
-    div.innerHTML = `<input data-k="text" placeholder="e.g. Good Communication Skills" value="${prefill}">`;
-    div.appendChild(delBtn(div));
-    $("str_rows").appendChild(div);
-  };
+// -------- generic row helpers --------
+function delBtn(el){
+  const b = document.createElement("button");
+  b.type="button"; b.className="del"; b.innerText="×"; b.title="Delete";
+  b.onclick = () => el.remove();
+  return b;
+}
 
-  // -------- skill row --------
-  window.addSkillRow = function(prefill = {}){
-    const div = document.createElement("div");
-    div.className = "row-item cols-skill";
-    div.innerHTML = `
-      <input data-k="label" placeholder="Label (e.g. Office Suite)" value="${prefill.label||""}">
-      <input data-k="value" placeholder="Value (e.g. M.S. Office)"   value="${prefill.value||""}">`;
-    div.appendChild(delBtn(div));
-    $("skill_rows").appendChild(div);
-  };
+// -------- FRESHER qualifications --------
+window.addFreshEdu = function(prefill={}){
+  const div = document.createElement("div");
+  div.className = "row-item cols-fresh-edu";
 
-  function collectRows(rootId){
-    const out = [];
-    document.querySelectorAll(`#${rootId} > .row-item`).forEach(div => {
-      const obj = {};
-      div.querySelectorAll("input").forEach(el => {
-        const k = el.dataset.k;
-        if(k) obj[k] = el.value.trim();
-      });
-      // For bullet rows, simplify to plain text
-      if("text" in obj){
-        if(obj.text) out.push(obj.text);
-      } else if(Object.values(obj).some(v => v)) {
-        out.push(obj);
+  // Qualification dropdown
+  const selWrap = document.createElement("div");
+  selWrap.className = "edu-select-row";
+  const sel = eduDropdown(prefill.course || "");
+  selWrap.appendChild(sel);
+
+  // Custom input (shown when "Other" selected)
+  const custom = document.createElement("input");
+  custom.placeholder = "Type qualification name";
+  custom.dataset.k = "course";
+  custom.value = (prefill.course && !EDU_OPTIONS.includes(prefill.course)) ? prefill.course : "";
+  custom.style.display = sel.value === "Other (custom…)" ? "" : "none";
+  selWrap.appendChild(custom);
+
+  sel.addEventListener("change", () => {
+    custom.style.display = sel.value === "Other (custom…)" ? "" : "none";
+    if(sel.value !== "Other (custom…)") custom.value = "";
+  });
+
+  const inst = document.createElement("input");
+  inst.dataset.k = "institute"; inst.placeholder = "Institution / School";
+  if(prefill.institute) inst.value = prefill.institute;
+
+  const year = document.createElement("input");
+  year.dataset.k = "year"; year.placeholder = "Year"; year.style.maxWidth="80px";
+  if(prefill.year) year.value = prefill.year;
+
+  // Store resolve fn for collection
+  div._getCourse = () => sel.value === "Other (custom…)" ? custom.value.trim() : sel.value;
+  div.appendChild(selWrap);
+  div.appendChild(inst);
+  div.appendChild(year);
+  div.appendChild(delBtn(div));
+  $("fresh_edu_rows").appendChild(div);
+};
+
+// -------- 5-col education --------
+window.addEduRow = function(prefill={}){
+  const div = document.createElement("div");
+  div.className = "row-item cols-edu";
+  const isOrdB = template === "ordinary_b";
+  div.innerHTML = `
+    <input data-k="c1" placeholder="${isOrdB?'Qualification':'Course'}"       value="${prefill.c1||""}">
+    <input data-k="c2" placeholder="${isOrdB?'University / College':'Institute'}" value="${prefill.c2||""}">
+    <input data-k="c3" placeholder="${isOrdB?'Specialization':'Board / University'}" value="${prefill.c3||""}">
+    <input data-k="c4" placeholder="${isOrdB?'% / Marks':'Year'}"              value="${prefill.c4||""}">
+    <input data-k="c5" placeholder="${isOrdB?'Year':'%'}"                      value="${prefill.c5||""}">`;
+  div.appendChild(delBtn(div));
+  $("edu_rows").appendChild(div);
+};
+
+// -------- experience bullet --------
+window.addExpRow = function(prefill=""){
+  const div = document.createElement("div");
+  div.className = "row-item cols-bullet";
+  div.innerHTML = `<input data-k="text" placeholder="e.g. Sales Officer at HDFC Bank, Apr 2022–Nov 2023" value="${prefill}">`;
+  div.appendChild(delBtn(div));
+  $("exp_rows").appendChild(div);
+};
+
+// -------- strength bullet --------
+window.addStrRow = function(prefill=""){
+  const div = document.createElement("div");
+  div.className = "row-item cols-bullet";
+  div.innerHTML = `<input data-k="text" placeholder="e.g. Good Communication Skills" value="${prefill}">`;
+  div.appendChild(delBtn(div));
+  $("str_rows").appendChild(div);
+};
+
+// -------- skill row --------
+window.addSkillRow = function(prefill={}){
+  const div = document.createElement("div");
+  div.className = "row-item cols-skill";
+  div.innerHTML = `
+    <input data-k="label" placeholder="Skill label (e.g. Office Suite)" value="${prefill.label||""}">
+    <input data-k="value" placeholder="Value (e.g. MS Office)"            value="${prefill.value||""}">`;
+  div.appendChild(delBtn(div));
+  $("skill_rows").appendChild(div);
+};
+
+function collectRows(rootId){
+  const out = [];
+  document.querySelectorAll(`#${rootId} > .row-item`).forEach(div => {
+    if(div._getCourse){
+      // Fresher edu row
+      const inst = div.querySelector('[data-k="institute"]');
+      const year = div.querySelector('[data-k="year"]');
+      const course = div._getCourse();
+      if(course || (inst && inst.value.trim())){
+        out.push({ course, institute: inst?inst.value.trim():"", year: year?year.value.trim():"" });
       }
+      return;
+    }
+    const obj = {};
+    div.querySelectorAll("input[data-k]").forEach(el => {
+      if(el.dataset.k) obj[el.dataset.k] = el.value.trim();
     });
-    return out;
-  }
+    if("text" in obj){
+      if(obj.text) out.push(obj.text);
+    } else if(Object.values(obj).some(v => v)){
+      out.push(obj);
+    }
+  });
+  return out;
+}
 
-  window.build = function(){
-    if(!template){ setStatus("Pick a template first.","err"); return; }
+window.build = function(){
+  if(!template){ setStatus("Pick a template first.","err"); return; }
+  const fields = {};
+  ["name","father","dob","gender","nationality","marital","religion","languages",
+   "addr1","addr2","city","mobile","email","place","date","objective","hobbies"
+  ].forEach(k => {
+    const el = $("f_"+k);
+    if(el && el.value.trim()) fields[k] = el.value.trim();
+  });
 
-    const fields = {};
-    ["name","father","dob","gender","nationality","marital","religion","languages",
-     "addr1","addr2","city","mobile","email","place","date","objective","hobbies"
-    ].forEach(k => {
-      const el = $("f_" + k);
-      if(el && el.value.trim()) fields[k] = el.value.trim();
-    });
-
-    const payload = {
-      template, fields,
-      qualifications: collectRows("fresh_edu_rows"),
-      education:      collectRows("edu_rows"),
-      experience:     collectRows("exp_rows"),
-      strengths:      collectRows("str_rows"),
-      skills:         collectRows("skill_rows"),
-    };
-
-    setStatus("Generating…");
-    fetch("/resume/build", {
-      method:"POST", headers:{"Content-Type":"application/json"},
-      body: JSON.stringify(payload)
-    }).then(r => r.json()).then(d => {
-      if(d.error){ setStatus(d.error,"err"); return; }
-      setStatus("Done.","ok");
-      $("result").innerHTML =
-        `<a class="btn primary" href="${d.out}" download>⤓ Download ${d.name}</a>`;
-    }).catch(e => setStatus("Build failed: " + e, "err"));
+  const payload = {
+    template,
+    fields,
+    enabled_sections: getEnabledSections(),
+    qualifications: collectRows("fresh_edu_rows"),
+    education:      collectRows("edu_rows"),
+    experience:     collectRows("exp_rows"),
+    strengths:      collectRows("str_rows"),
+    skills:         collectRows("skill_rows"),
   };
-</script>
 
+  setStatus("Generating…");
+  fetch("/resume/build", {
+    method:"POST", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify(payload)
+  }).then(r=>r.json()).then(d=>{
+    if(d.error){ setStatus(d.error,"err"); return; }
+    setStatus("Done! ✓","ok");
+    $("result").innerHTML =
+      `<a class="btn primary" href="${d.out}" download>⤓ Download ${d.name}</a>`;
+  }).catch(e=>setStatus("Build failed: "+e,"err"));
+};
+
+// -------- DEV PANEL --------
+window.toggleResumeDevPanel = function(){
+  const p = $("resume_dev_panel");
+  const open = p.style.display === "none";
+  p.style.display = open ? "block" : "none";
+  if(open) renderEduOptList();
+};
+
+function renderEduOptList(){
+  const container = $("edu_opt_list");
+  container.innerHTML = "";
+  EDU_OPTIONS.forEach((opt, i) => {
+    const row = document.createElement("div");
+    row.className = "dev-list-item";
+    row.innerHTML = `<span>${opt}</span>
+      <button onclick="devRemoveEduOption(${i})">✕ Remove</button>`;
+    container.appendChild(row);
+  });
+}
+
+window.devAddEduOption = function(){
+  const val = $("edu_opt_new").value.trim();
+  if(!val) return;
+  if(EDU_OPTIONS.includes(val)){ $("edu_opt_new").value=""; return; }
+  EDU_OPTIONS.push(val);
+  $("edu_opt_new").value = "";
+  renderEduOptList();
+};
+
+window.devRemoveEduOption = function(i){
+  EDU_OPTIONS.splice(i, 1);
+  renderEduOptList();
+};
+
+window.devSaveEduOptions = function(){
+  fetch("/resume/edu-options", {
+    method:"POST", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({ options: EDU_OPTIONS })
+  }).then(r=>r.json()).then(d=>{
+    const msg = $("edu_opt_msg");
+    if(d.ok){ msg.innerText="Saved ✓"; msg.className="dev-msg ok"; }
+    else { msg.innerText = d.error||"Error"; msg.className="dev-msg err"; }
+    setTimeout(()=>msg.innerText="", 4000);
+  });
+};
+</script>
 </body>
 </html>

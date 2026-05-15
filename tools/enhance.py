@@ -3,16 +3,28 @@
 Quick actions: lighten, darken, whiten (CLAHE), dark-mode fix.
 Hidden advanced sliders: hue, saturation, manual gamma.
 
+Monitor Folder: scans a configurable local folder (usually Downloads) and lets
+you pick files directly from there. After processing they can be moved to Temp.
+
 Workflow:
-  /enhance/upload   → get UIDs + thumbnails
-  /enhance/apply    → apply an action to a list of UIDs (server overwrites
-                      the working JPG; an UNDO copy is kept per-UID)
-  /enhance/undo     → restore previous version
-  /enhance/zip      → bundle UIDs as zip
-  /enhance/pdf      → render UIDs as one A4 PDF (one image per page)
+  /enhance/upload         → get UIDs + thumbnails
+  /enhance/apply          → apply an action to a list of UIDs
+  /enhance/undo           → restore previous version
+  /enhance/zip            → bundle UIDs as zip
+  /enhance/pdf            → render UIDs as one A4 PDF
+  /enhance/folder-scan    → list files in configured monitor folder
+  /enhance/folder-thumb   → serve thumbnail of a file in monitor folder
+  /enhance/folder-import  → copy files from monitor folder into enhance queue
+  /enhance/folder-move-temp → move files from monitor folder to Temp sub-folder
 """
 
-import os, time, shutil, zipfile, io
+import os
+import time
+import shutil
+import zipfile
+import io
+import json
+
 from flask import Blueprint, render_template, request, jsonify, send_file
 import cv2
 import numpy as np
@@ -20,22 +32,45 @@ from PIL import Image
 import pillow_heif
 
 from . import utils
-from config import OUTPUT_DIR
+from config import OUTPUT_DIR, BASE_DIR
 
 pillow_heif.register_heif_opener()
 bp = Blueprint("enhance", __name__)
 
 WORK_DIR = OUTPUT_DIR
 IMG_EXTS = {"jpg","jpeg","png","webp","heic","heif","avif","bmp","gif","tif","tiff"}
+PDF_EXTS = {"pdf"}
+ALL_EXTS  = IMG_EXTS | PDF_EXTS
+
+OVERRIDES_PATH = os.path.join(BASE_DIR, "overrides.json")
+
+
+def _default_monitor_dir():
+    """Return the best-guess downloads folder for this OS."""
+    if os.name == "nt":
+        base = os.environ.get("USERPROFILE") or os.path.expanduser("~")
+        return os.path.join(base, "Downloads")
+    return os.path.expanduser("~/Downloads")
+
+
+def _get_monitor_dir():
+    try:
+        with open(OVERRIDES_PATH) as f:
+            data = json.load(f)
+        d = data.get("enhance", {}).get("monitor_dir", "").strip()
+        if d and os.path.isdir(d):
+            return d
+    except Exception:
+        pass
+    d = _default_monitor_dir()
+    return d if os.path.isdir(d) else None
 
 
 def _work(uid, suffix=""):
     return os.path.join(WORK_DIR, f"{uid}_enh{suffix}.jpg")
 
-
 def _undo(uid):
     return os.path.join(WORK_DIR, f"{uid}_enh_undo.jpg")
-
 
 def _thumb(uid):
     return os.path.join(WORK_DIR, f"{uid}_enh_thumb.jpg")
@@ -43,7 +78,9 @@ def _thumb(uid):
 
 @bp.route("/enhance")
 def page():
-    return render_template("tool_enhance.html", title="Enhance")
+    monitor_dir = _get_monitor_dir() or ""
+    return render_template("tool_enhance.html", title="Enhance",
+                           monitor_dir=monitor_dir)
 
 
 @bp.route("/enhance/upload", methods=["POST"])
@@ -63,7 +100,6 @@ def upload():
             with Image.open(raw) as im:
                 im = im.convert("RGB")
                 im.save(_work(uid), "JPEG", quality=92)
-                # thumb
                 im.thumbnail((220, 220))
                 im.save(_thumb(uid), "JPEG", quality=82)
             shutil.copy(_work(uid), _undo(uid))
@@ -90,11 +126,9 @@ def _clahe_whiten(img):
     cl = cv2.createCLAHE(clipLimit=2.5, tileGridSize=(8, 8)).apply(l)
     out = cv2.merge((cl, a, b))
     out = cv2.cvtColor(out, cv2.COLOR_LAB2BGR)
-    # gentle white pull
     return cv2.convertScaleAbs(out, alpha=1.05, beta=8)
 
 def _dark_fix(img):
-    """For pictures shot in the dark: gamma boost shadows then gentle CLAHE."""
     inv_g = 1.0 / 0.55
     table = np.array([((i / 255.0) ** inv_g) * 255 for i in range(256)]).astype("uint8")
     boosted = cv2.LUT(img, table)
@@ -133,10 +167,7 @@ def apply():
         img = cv2.imread(path)
         if img is None:
             updated.append({"uid": uid, "error":"unreadable"}); continue
-
-        # save undo
         shutil.copy(path, _undo(uid))
-
         try:
             if   op == "lighten":  img = _lighten(img, int(params.get("amount", 30)))
             elif op == "darken":   img = _darken(img,  int(params.get("amount", 25)))
@@ -151,7 +182,6 @@ def apply():
             updated.append({"uid": uid, "error": str(e)}); continue
 
         cv2.imwrite(path, img, [cv2.IMWRITE_JPEG_QUALITY, 92])
-        # refresh thumb
         try:
             with Image.open(path) as pim:
                 pim.thumbnail((220, 220))
@@ -209,13 +239,10 @@ def make_zip():
 
 @bp.route("/enhance/pdf", methods=["POST"])
 def make_pdf():
-    """Render selected images as a single A4 PDF (one per page, contained, centered)."""
     j = request.get_json(silent=True) or {}
     uids = j.get("uids") or []
     if not uids:
         return jsonify({"error":"none selected"})
-
-    # A4 @ 200 DPI = 1654 x 2339
     A4 = (1654, 2339)
     pages = []
     for uid in uids:
@@ -228,9 +255,151 @@ def make_pdf():
         pages.append(page)
     if not pages:
         return jsonify({"error":"no readable images"})
-
     name = f"enhanced_{int(time.time())}.pdf"
     full = os.path.join(WORK_DIR, name)
     pages[0].save(full, "PDF", resolution=200.0,
                   save_all=True, append_images=pages[1:])
     return jsonify({"out": f"/file/{name}"})
+
+
+# ============================================================
+#  MONITOR FOLDER routes
+# ============================================================
+@bp.route("/enhance/folder-scan")
+def folder_scan():
+    folder = _get_monitor_dir()
+    if not folder or not os.path.isdir(folder):
+        return jsonify({"error": "Monitor folder not configured or not found",
+                        "folder": folder or ""})
+    files = []
+    try:
+        for fname in sorted(os.listdir(folder)):
+            ext = fname.rsplit(".", 1)[-1].lower() if "." in fname else ""
+            if ext not in ALL_EXTS:
+                continue
+            full = os.path.join(folder, fname)
+            if not os.path.isfile(full):
+                continue
+            stat = os.stat(full)
+            files.append({
+                "name": fname,
+                "ext": ext,
+                "size_kb": round(stat.st_size / 1024, 1),
+                "mtime": stat.st_mtime,
+                "is_image": ext in IMG_EXTS,
+                "is_pdf": ext in PDF_EXTS,
+            })
+    except Exception as e:
+        return jsonify({"error": str(e), "folder": folder})
+
+    # Sort newest first
+    files.sort(key=lambda x: x["mtime"], reverse=True)
+    return jsonify({"folder": folder, "files": files})
+
+
+@bp.route("/enhance/folder-thumb")
+def folder_thumb():
+    folder = _get_monitor_dir()
+    if not folder:
+        return "no folder", 404
+    fname = request.args.get("name", "")
+    if not fname or ".." in fname:
+        return "bad name", 400
+    full = os.path.join(folder, fname)
+    if not os.path.isfile(full):
+        return "not found", 404
+    ext = fname.rsplit(".", 1)[-1].lower() if "." in fname else ""
+    if ext not in IMG_EXTS:
+        return "not an image", 400
+    try:
+        with Image.open(full) as im:
+            im = im.convert("RGB")
+            im.thumbnail((220, 220))
+            buf = io.BytesIO()
+            im.save(buf, "JPEG", quality=80)
+            buf.seek(0)
+            return send_file(buf, mimetype="image/jpeg")
+    except Exception as e:
+        return str(e), 500
+
+
+@bp.route("/enhance/folder-import", methods=["POST"])
+def folder_import():
+    """Copy selected files from monitor folder into the enhance work queue."""
+    folder = _get_monitor_dir()
+    if not folder:
+        return jsonify({"error": "Monitor folder not configured"})
+    j = request.get_json(silent=True) or {}
+    names = j.get("names") or []
+    out = []
+    for fname in names:
+        if not fname or ".." in fname:
+            continue
+        full = os.path.join(folder, fname)
+        ext = fname.rsplit(".", 1)[-1].lower() if "." in fname else ""
+        if not os.path.isfile(full) or ext not in IMG_EXTS:
+            out.append({"name": fname, "error": "not a supported image"})
+            continue
+        uid = str(__import__("uuid").uuid4())[:8]
+        work_path = _work(uid)
+        try:
+            with Image.open(full) as im:
+                im = im.convert("RGB")
+                im.save(work_path, "JPEG", quality=92)
+                im.thumbnail((220, 220))
+                im.save(_thumb(uid), "JPEG", quality=82)
+            shutil.copy(work_path, _undo(uid))
+            out.append({
+                "uid": uid, "name": fname,
+                "thumb": f"/file/{uid}_enh_thumb.jpg",
+                "full":  f"/file/{uid}_enh.jpg",
+            })
+        except Exception as e:
+            out.append({"name": fname, "error": str(e)})
+    return jsonify({"items": out})
+
+
+@bp.route("/enhance/folder-move-temp", methods=["POST"])
+def folder_move_temp():
+    """Move processed files from monitor folder to a Temp sub-folder."""
+    folder = _get_monitor_dir()
+    if not folder:
+        return jsonify({"error": "Monitor folder not configured"})
+    j = request.get_json(silent=True) or {}
+    names = j.get("names") or []
+    temp_dir = os.path.join(folder, "Temp")
+    os.makedirs(temp_dir, exist_ok=True)
+    moved = []
+    errors = []
+    for fname in names:
+        if not fname or ".." in fname:
+            continue
+        src = os.path.join(folder, fname)
+        dst = os.path.join(temp_dir, fname)
+        if not os.path.isfile(src):
+            errors.append(fname); continue
+        try:
+            shutil.move(src, dst)
+            moved.append(fname)
+        except Exception as e:
+            errors.append(f"{fname}: {e}")
+    return jsonify({"moved": moved, "errors": errors, "temp_dir": temp_dir})
+
+
+@bp.route("/enhance/set-monitor-dir", methods=["POST"])
+def set_monitor_dir():
+    j = request.get_json(silent=True) or {}
+    new_dir = (j.get("dir") or "").strip()
+    if new_dir and not os.path.isdir(new_dir):
+        return jsonify({"error": f"Directory not found: {new_dir}"})
+    try:
+        with open(OVERRIDES_PATH) as f:
+            data = json.load(f)
+    except Exception:
+        data = {}
+    if "enhance" not in data:
+        data["enhance"] = {}
+    data["enhance"]["monitor_dir"] = new_dir
+    with open(OVERRIDES_PATH, "w") as f:
+        json.dump(data, f, indent=2)
+    return jsonify({"ok": True, "dir": new_dir})

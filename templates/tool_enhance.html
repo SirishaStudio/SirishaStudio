@@ -4,22 +4,47 @@
 <meta charset="UTF-8">
 <title>Enhance — Studio</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+<script src="{{ url_for('static', filename='js/theme.js') }}"></script>
 </head>
 <body>
 
 <div class="topbar">
   <a class="back-link" href="/">← All tools</a>
   <span class="brand">SIRISHA STUDIO</span>
+  <button class="theme-toggle" id="theme_btn" onclick="toggleTheme()">🌙 Dark</button>
 </div>
 
 <h2>Enhance</h2>
 
+<!-- ===== MONITOR FOLDER PANEL ===== -->
+<div class="monitor-panel" id="monitor_section">
+  <div class="monitor-panel-head" onclick="toggleMonitor()">
+    <h4>📂 Quick Import from Downloads Folder</h4>
+    <span id="monitor_folder_label">{{ monitor_dir or 'Click to set folder' }}</span>
+    <button class="btn" style="font-size:11px;padding:4px 10px" onclick="event.stopPropagation();scanFolder()">🔄 Refresh</button>
+    <button class="btn" style="font-size:11px;padding:4px 10px" onclick="event.stopPropagation();moveToTemp()">📦 Move selected to Temp</button>
+    <span id="monitor_chevron" style="color:var(--muted);font-size:16px">▼</span>
+  </div>
+  <div id="monitor_body" class="monitor-body" style="display:none">
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+      <button class="btn primary" onclick="importSelected()">⬆ Add selected to Enhance</button>
+      <button class="btn" onclick="monSelAll()">Select all</button>
+      <button class="btn" onclick="monSelNone()">Select none</button>
+      <span style="font-size:11px;color:var(--muted)" id="monitor_count"></span>
+    </div>
+    <div id="monitor_grid" class="monitor-grid">
+      <p style="color:var(--muted);font-size:12px;grid-column:1/-1" id="monitor_placeholder">Loading…</p>
+    </div>
+  </div>
+</div>
+
+<!-- ===== UPLOAD BAR ===== -->
 <div class="upload-bar">
   <input type="file" id="files" multiple
          accept=".jpg,.jpeg,.png,.webp,.heic,.heif,.avif,.bmp,.gif,.tif,.tiff">
   <button class="btn primary" onclick="uploadFiles()">⬆ Add images</button>
   <span style="color:var(--muted);font-size:11px">
-    Click to select. Ctrl+Click toggles. Shift+Click for range. Ctrl+I inverts.
+    Click · Ctrl+Click toggles · Shift+Click range · Ctrl+I inverts
   </span>
 </div>
 
@@ -35,6 +60,7 @@
   <button class="btn" onclick="toggleAdv()">⚙ Advanced</button>
   <button class="btn" onclick="downloadZip()">⤓ ZIP selected</button>
   <button class="btn" onclick="printAllPdf()">🖨 Print as PDF</button>
+  <button class="btn dev" onclick="toggleEnhDevPanel()">DEV</button>
 </div>
 
 <div id="adv" class="enh-adv" style="display:none">
@@ -68,14 +94,126 @@
 <div id="grid" class="enh-grid"></div>
 <div id="dropzone" class="dropzone">Drop images anywhere here</div>
 
+<!-- DEV PANEL -->
+<div id="enh_dev_panel" class="dev-panel" style="display:none">
+  <div class="dev-head">
+    ⚙ ENHANCE DEV TOOLS
+    <button class="x" onclick="document.getElementById('enh_dev_panel').style.display='none'">×</button>
+  </div>
+  <div class="dev-body">
+    <div class="dev-section">
+      <div class="dev-title">MONITOR FOLDER PATH</div>
+      <p class="dev-hint">Set the folder to scan for images and PDFs (default: Downloads).</p>
+      <p class="dev-hint">Current: <strong id="dev_monitor_current">{{ monitor_dir or 'auto-detect' }}</strong></p>
+      <div class="dev-input-row">
+        <input id="dev_monitor_input" placeholder="e.g. C:\Users\rao\Downloads">
+        <button onclick="devSetMonitorDir()">Set</button>
+      </div>
+      <div style="margin-top:6px">
+        <button class="btn" style="font-size:11px" onclick="devResetMonitorDir()">Reset to default</button>
+        <span id="dev_monitor_msg" class="dev-msg"></span>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
   const $ = id => document.getElementById(id);
-  let items = [];        // [{uid, name, thumb, full}]
-  const sel = new Set(); // selected UIDs
+  let items = [];
+  const sel = new Set();
   let lastClicked = -1;
+
+  // Monitor folder state
+  let monFiles = [];
+  const monSel = new Set();
+  let monitorOpen = false;
 
   function setStatus(m, c=""){ $("status").innerText = m; $("status").className = c; }
 
+  // -------- Monitor Panel --------
+  window.toggleMonitor = function(){
+    monitorOpen = !monitorOpen;
+    $("monitor_body").style.display = monitorOpen ? "" : "none";
+    $("monitor_chevron").textContent = monitorOpen ? "▲" : "▼";
+    if(monitorOpen && !monFiles.length) scanFolder();
+  };
+
+  window.scanFolder = function(){
+    $("monitor_placeholder").textContent = "Scanning…";
+    fetch("/enhance/folder-scan")
+      .then(r=>r.json())
+      .then(d=>{
+        if(d.error){
+          $("monitor_placeholder").textContent = "⚠ " + d.error;
+          return;
+        }
+        $("monitor_folder_label").textContent = d.folder || "";
+        monFiles = d.files || [];
+        $("monitor_count").textContent = `${monFiles.length} file(s)`;
+        renderMonitor();
+      }).catch(e => { $("monitor_placeholder").textContent = "Error: "+e; });
+  };
+
+  function renderMonitor(){
+    const grid = $("monitor_grid");
+    if(!monFiles.length){
+      grid.innerHTML = '<p style="color:var(--muted);font-size:12px;grid-column:1/-1">No images or PDFs found in folder.</p>';
+      return;
+    }
+    grid.innerHTML = monFiles.map((f,i) => {
+      const isSel = monSel.has(f.name);
+      const inner = f.is_image
+        ? `<img src="/enhance/folder-thumb?name=${encodeURIComponent(f.name)}&t=${Date.now()}" alt="${f.name}" loading="lazy">`
+        : `<div class="pdf-icon">📄</div>`;
+      return `<div class="monitor-cell ${isSel?'sel':''}" data-i="${i}" data-name="${f.name}" onclick="monCellClick(this)">
+        ${inner}
+        <div class="file-name" title="${f.name}">${f.name}</div>
+        <div style="font-size:10px;color:var(--muted)">${f.size_kb} KB</div>
+      </div>`;
+    }).join("");
+  }
+
+  window.monCellClick = function(el){
+    const name = el.dataset.name;
+    if(monSel.has(name)) monSel.delete(name); else monSel.add(name);
+    el.classList.toggle("sel", monSel.has(name));
+    $("monitor_count").textContent = `${monFiles.length} file(s) · ${monSel.size} selected`;
+  };
+
+  window.monSelAll  = function(){ monFiles.forEach(f => monSel.add(f.name)); renderMonitor(); $("monitor_count").textContent=`${monFiles.length} file(s) · ${monSel.size} selected`; };
+  window.monSelNone = function(){ monSel.clear(); renderMonitor(); $("monitor_count").textContent=`${monFiles.length} file(s) · 0 selected`; };
+
+  window.importSelected = function(){
+    const names = monSel.size ? Array.from(monSel) : monFiles.filter(f=>f.is_image).map(f=>f.name);
+    if(!names.length){ setStatus("No images to import.","err"); return; }
+    setStatus("Importing from folder…");
+    fetch("/enhance/folder-import", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({ names })
+    }).then(r=>r.json()).then(d=>{
+      const oks = (d.items||[]).filter(x=>!x.error);
+      const errs = (d.items||[]).filter(x=>x.error);
+      items = items.concat(oks);
+      setStatus(`Added ${oks.length} from folder.` + (errs.length?` ${errs.length} failed.`:""), "ok");
+      render();
+    }).catch(e=>setStatus("Import error: "+e,"err"));
+  };
+
+  window.moveToTemp = function(){
+    const names = monSel.size ? Array.from(monSel) : monFiles.map(f=>f.name);
+    if(!names.length){ setStatus("Nothing to move.","err"); return; }
+    if(!confirm(`Move ${names.length} file(s) to Temp folder?`)) return;
+    fetch("/enhance/folder-move-temp", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({ names })
+    }).then(r=>r.json()).then(d=>{
+      setStatus(`Moved ${d.moved.length} to Temp.` + (d.errors.length?` Errors: ${d.errors.join(", ")}`:""), "ok");
+      monSel.clear();
+      scanFolder();
+    });
+  };
+
+  // -------- Main enhance grid --------
   function render(){
     const html = items.map((it, i) => {
       const isSel = sel.has(it.uid);
@@ -107,8 +245,7 @@
 
   document.addEventListener("keydown", ev => {
     if((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === "i"){
-      ev.preventDefault();
-      window.invertSel();
+      ev.preventDefault(); window.invertSel();
     }
   });
 
@@ -212,7 +349,7 @@
     });
   };
 
-  // drag-drop into the page
+  // drag-drop
   ["dragenter","dragover"].forEach(ev =>
     document.addEventListener(ev, e => { e.preventDefault(); $("dropzone").classList.add("drop-show"); }));
   ["dragleave","drop"].forEach(ev =>
@@ -223,6 +360,39 @@
       $("files").files = e.dataTransfer.files;
       uploadFiles();
     }
+  });
+
+  // -------- Dev Panel --------
+  window.toggleEnhDevPanel = function(){
+    const p = $("enh_dev_panel");
+    p.style.display = p.style.display === "none" ? "block" : "none";
+  };
+
+  window.devSetMonitorDir = function(){
+    const dir = $("dev_monitor_input").value.trim();
+    fetch("/enhance/set-monitor-dir", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({ dir })
+    }).then(r=>r.json()).then(d=>{
+      const msg = $("dev_monitor_msg");
+      if(d.ok){
+        msg.innerText = "Saved ✓"; msg.className="dev-msg ok";
+        $("dev_monitor_current").textContent = dir || "auto-detect";
+        $("monitor_folder_label").textContent = dir || "auto-detect";
+        scanFolder();
+      } else { msg.innerText = d.error; msg.className="dev-msg err"; }
+      setTimeout(()=>msg.innerText="",4000);
+    });
+  };
+
+  window.devResetMonitorDir = function(){
+    $("dev_monitor_input").value = "";
+    devSetMonitorDir();
+  };
+
+  // Auto-open monitor panel and scan on page load
+  document.addEventListener("DOMContentLoaded", function(){
+    toggleMonitor(); // open by default
   });
 </script>
 

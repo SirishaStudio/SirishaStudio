@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <title>Image Compressor — Studio</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+<script src="{{ url_for('static', filename='js/theme.js') }}"></script>
 <style>
   .compress-card{
     max-width:560px; margin:18px auto; padding:18px 20px;
@@ -37,6 +38,7 @@
 <div class="topbar">
   <a class="back-link" href="/">← All tools</a>
   <span class="brand">SIRISHA STUDIO</span>
+  <button class="theme-toggle" id="theme_btn" onclick="toggleTheme()">🌙 Dark</button>
 </div>
 
 <h2>Compress an Image</h2>

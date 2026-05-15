@@ -4,13 +4,14 @@
 <meta charset="UTF-8">
 <title>Sirisha Studio</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+<script src="{{ url_for('static', filename='js/theme.js') }}"></script>
 </head>
 <body>
   <div class="topbar">
     <span class="brand">SIRISHA STUDIO</span>
     <span style="display:flex;gap:10px;align-items:center">
       <a class="back-link" href="/tray" data-tray-badge style="border:1px solid var(--border);padding:4px 10px;border-radius:6px">Tray</a>
-      <span class="back-link">card processor</span>
+      <button class="theme-toggle" id="theme_btn" onclick="toggleTheme()">🌙 Dark</button>
     </span>
   </div>
 
