@@ -139,19 +139,21 @@
   };
 
   window.scanFolder = function(){
-    $("monitor_placeholder").textContent = "Scanning…";
+    const ph = $("monitor_placeholder");
+    if(ph) ph.textContent = "Scanning…";
     fetch("/enhance/folder-scan")
       .then(r=>r.json())
       .then(d=>{
+        const ph2 = $("monitor_placeholder");
         if(d.error){
-          $("monitor_placeholder").textContent = "⚠ " + d.error;
+          if(ph2) ph2.textContent = "⚠ " + d.error;
           return;
         }
-        $("monitor_folder_label").textContent = d.folder || "";
+        if($("monitor_folder_label")) $("monitor_folder_label").textContent = d.folder || "";
         monFiles = d.files || [];
-        $("monitor_count").textContent = `${monFiles.length} file(s)`;
+        if($("monitor_count")) $("monitor_count").textContent = `${monFiles.length} file(s)`;
         renderMonitor();
-      }).catch(e => { $("monitor_placeholder").textContent = "Error: "+e; });
+      }).catch(e => { const ph3=$("monitor_placeholder"); if(ph3) ph3.textContent = "Error: "+e; });
   };
 
   function renderMonitor(){

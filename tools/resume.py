@@ -1,48 +1,46 @@
-"""RESUME MAKER — builds DOCX resumes from scratch.
+"""RESUME MAKER — builds DOCX resumes matching real attached templates.
 
-Two types:
-  - fresher   : ONE page. Dynamic qualifications list. Two visual variants.
-  - ordinary  : Full-featured. Merges what was formerly "ordinary" + "detailed".
-                Two visual variants. Every section has an enable/disable flag.
+fresher_a  : Vijay Kumar style  — compact header, text quals, experience, job desc, inter skills
+fresher_b  : Centered modern    — large name, tabular quals, skills section
+ordinary_a : Karri Karthik style — 5-col edu table, computer skills, strengths, hobbies, profile last
+ordinary_b : Emandi Kanaka style — personal details FIRST, edu bullets, comp skills, experience, objective, strengths, hobbies
 
-Education qualification options are stored in overrides.json under
-  resume → edu_options   (list of strings)
-and can be managed from the Dev panel on the resume page.
+Education qualification options stored in overrides.json → resume → edu_options.
 """
 
-import os
-import json
-import time
-from io import BytesIO
-
-from flask import Blueprint, render_template, request, jsonify, send_file
+import os, json, time
+from flask import Blueprint, render_template, request, jsonify
 from docx import Document
-from docx.shared import Pt, Inches, Cm, RGBColor
+from docx.shared import Pt, Inches, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_TAB_ALIGNMENT
 from docx.enum.table import WD_ALIGN_VERTICAL
 from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
-
 from config import OUTPUT_DIR, BASE_DIR
 from tools import utils
 
 bp = Blueprint("resume", __name__)
 
-# ============================================================
-#  Default education qualification options
-#  (editable from Dev panel → resume → edu_options)
-# ============================================================
 DEFAULT_EDU_OPTIONS = [
     "SSC", "Diploma", "Inter", "Degree", "B.Tech", "M.Tech",
     "MBA", "MCA", "B.Com", "M.Com", "ITI", "Polytechnic"
 ]
+OVERRIDES_PATH = os.path.join(BASE_DIR, "overrides.json")
 
-OVERRIDES_PATH_RESUME = os.path.join(BASE_DIR, "overrides.json")
+TEMPLATES = {
+    "fresher_a":  {"group": "fresher",   "label": "Fresher — Experience",  "blurb": "Name+S/o header · Qualifications list · Experience · Job Desc · Skills"},
+    "fresher_b":  {"group": "fresher",   "label": "Fresher — Compact",     "blurb": "Centered name · Tabular qualifications · Clean layout"},
+    "ordinary_a": {"group": "ordinary",  "label": "Ordinary — Professional","blurb": "Header table · 5-col edu · Computer skills · Strengths · Hobbies · Profile last"},
+    "ordinary_b": {"group": "ordinary",  "label": "Ordinary — Detailed",   "blurb": "Personal details first · Edu bullets · Religion · Objective later · Strengths · Hobbies"},
+}
 
 
+# ============================================================
+#  Helpers
+# ============================================================
 def _load_edu_options():
     try:
-        with open(OVERRIDES_PATH_RESUME) as f:
+        with open(OVERRIDES_PATH) as f:
             data = json.load(f)
         opts = data.get("resume", {}).get("edu_options")
         if opts and isinstance(opts, list):
@@ -52,39 +50,14 @@ def _load_edu_options():
     return DEFAULT_EDU_OPTIONS[:]
 
 
-# ============================================================
-#  Templates metadata (used by front-end picker)
-# ============================================================
-TEMPLATES = {
-    "fresher_a": {
-        "group": "fresher",
-        "label": "Fresher — Classic",
-        "blurb": "Clean single-page. Bold header, qualification list, personal profile.",
-        "variant": "a",
-    },
-    "fresher_b": {
-        "group": "fresher",
-        "label": "Fresher — Compact",
-        "blurb": "Minimal layout. Objective first, tabular qualifications, one-line profile.",
-        "variant": "b",
-    },
-    "ordinary_a": {
-        "group": "ordinary",
-        "label": "Ordinary — Professional",
-        "blurb": "Header + address, 5-col edu table, experience, strengths, personal details.",
-        "variant": "a",
-    },
-    "ordinary_b": {
-        "group": "ordinary",
-        "label": "Ordinary — Detailed",
-        "blurb": "Large name header, technical skills section, work experience, religion field.",
-        "variant": "b",
-    },
-}
+def _set_margins(doc, top=0.6, bottom=0.6, left=0.7, right=0.7):
+    for s in doc.sections:
+        s.top_margin    = Inches(top)
+        s.bottom_margin = Inches(bottom)
+        s.left_margin   = Inches(left)
+        s.right_margin  = Inches(right)
 
-# ============================================================
-#  Small docx helpers
-# ============================================================
+
 def _set_cell_border(cell, **kwargs):
     tc_pr = cell._tc.get_or_add_tcPr()
     borders = tc_pr.find(qn("w:tcBorders"))
@@ -109,573 +82,517 @@ def _shade_cell(cell, hex_color):
     tc_pr.append(shd)
 
 
-def _set_margins(doc, top=0.7, bottom=0.7, left=0.7, right=0.7):
-    for section in doc.sections:
-        section.top_margin = Inches(top)
-        section.bottom_margin = Inches(bottom)
-        section.left_margin = Inches(left)
-        section.right_margin = Inches(right)
-
-
-def _para(doc_or_cell, text="", *, bold=False, size=11, align=None, italic=False,
-          color=None, space_after=0):
-    p = doc_or_cell.add_paragraph()
-    if align == "center":
-        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    elif align == "right":
-        p.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-    elif align == "justify":
-        p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-    p.paragraph_format.space_after = Pt(space_after)
-    if text:
-        r = p.add_run(text)
-        r.bold = bold
-        r.italic = italic
-        r.font.size = Pt(size)
-        if color:
-            r.font.color.rgb = RGBColor(*color)
-    return p
-
-
-def _section_heading(doc, text, *, size=12, underline=True):
-    p = doc.add_paragraph()
-    p.paragraph_format.space_before = Pt(6)
-    p.paragraph_format.space_after = Pt(2)
-    r = p.add_run(text)
-    r.bold = True
-    r.font.size = Pt(size)
-    r.underline = underline
-    return p
-
-
-def _bullets(doc, items, size=11):
-    for it in items:
-        if not it:
-            continue
-        p = doc.add_paragraph(style=None)
-        p.paragraph_format.left_indent = Inches(0.35)
-        p.paragraph_format.space_after = Pt(2)
-        r1 = p.add_run("•  ")
-        r1.font.size = Pt(size)
-        r2 = p.add_run(str(it))
-        r2.font.size = Pt(size)
-
-
-def _kv_dotted(doc, label, value, *, size=11, label_w=2.0):
-    p = doc.add_paragraph()
-    p.paragraph_format.space_after = Pt(2)
-    tabs = p.paragraph_format.tab_stops
-    tabs.add_tab_stop(Inches(label_w), WD_TAB_ALIGNMENT.LEFT)
-    r1 = p.add_run(label)
-    r1.bold = True
-    r1.font.size = Pt(size)
-    r2 = p.add_run("\t: " + (value or ""))
-    r2.font.size = Pt(size)
-    return p
-
-
-def _hdr_contact_table(doc, name, lines_left, lines_right, name_size=18):
-    t = doc.add_table(rows=1, cols=2)
-    t.autofit = True
-    t.columns[0].width = Inches(4.0)
-    t.columns[1].width = Inches(3.0)
-    left, right = t.rows[0].cells
-    pn = left.paragraphs[0]
-    pn.paragraph_format.space_after = Pt(2)
-    r = pn.add_run(name or "")
-    r.bold = True
-    r.font.size = Pt(name_size)
-    for line in lines_left:
-        if line:
-            _para(left, line, size=10, space_after=0)
-    for line in lines_right:
-        if line:
-            _para(right, line, size=10, align="right", space_after=0)
-    for cell in (left, right):
-        _set_cell_border(cell, top=0, left=0, right=0, bottom=0)
-    return t
-
-
 def _hr(doc):
     p = doc.add_paragraph()
     p.paragraph_format.space_after = Pt(2)
     pPr = p._p.get_or_add_pPr()
     pBdr = OxmlElement("w:pBdr")
-    bottom = OxmlElement("w:bottom")
-    bottom.set(qn("w:val"), "single")
-    bottom.set(qn("w:sz"), "8")
-    bottom.set(qn("w:space"), "1")
-    bottom.set(qn("w:color"), "000000")
-    pBdr.append(bottom)
+    bot = OxmlElement("w:bottom")
+    bot.set(qn("w:val"), "single")
+    bot.set(qn("w:sz"), "8")
+    bot.set(qn("w:space"), "1")
+    bot.set(qn("w:color"), "000000")
+    pBdr.append(bot)
     pPr.append(pBdr)
 
 
-def _edu_table_5col(doc, edu, headers):
-    edu = [e for e in edu if any((e.get(k) or "").strip()
-                                 for k in ("c1", "c2", "c3", "c4", "c5"))]
-    if not edu:
-        _para(doc, "(No education rows added.)", size=11, italic=True)
-        return
-    t = doc.add_table(rows=1 + len(edu), cols=5)
-    t.alignment = WD_ALIGN_PARAGRAPH.CENTER
+def _p(doc_or_cell, text="", *, bold=False, size=11, align=None,
+       italic=False, space_after=2, underline=False):
+    p = doc_or_cell.add_paragraph()
+    if align == "center": p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    elif align == "right": p.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    elif align == "justify": p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+    p.paragraph_format.space_after = Pt(space_after)
+    if text:
+        r = p.add_run(text)
+        r.bold = bold; r.italic = italic; r.underline = underline
+        r.font.size = Pt(size)
+    return p
+
+
+def _heading(doc, text, *, size=11, underline=True):
+    p = doc.add_paragraph()
+    p.paragraph_format.space_before = Pt(5)
+    p.paragraph_format.space_after  = Pt(2)
+    r = p.add_run(text)
+    r.bold = True; r.underline = underline
+    r.font.size = Pt(size)
+    return p
+
+
+def _bullet(doc, items, size=11, prefix="•  "):
+    for it in items:
+        it = str(it).strip()
+        if not it: continue
+        p = doc.add_paragraph()
+        p.paragraph_format.left_indent = Inches(0.3)
+        p.paragraph_format.space_after = Pt(1)
+        p.add_run(prefix).font.size = Pt(size)
+        p.add_run(it).font.size = Pt(size)
+
+
+def _kv(doc, label, value, *, size=11, lw=1.7):
+    if not (value or "").strip(): return
+    p = doc.add_paragraph()
+    p.paragraph_format.space_after = Pt(2)
+    tabs = p.paragraph_format.tab_stops
+    tabs.add_tab_stop(Inches(lw), WD_TAB_ALIGNMENT.LEFT)
+    r = p.add_run(label); r.bold = True; r.font.size = Pt(size)
+    p.add_run("\t: " + value.strip()).font.size = Pt(size)
+
+
+def _two_col_header(doc, name, left_lines, right_lines, name_size=15):
+    """Two-column header table: name+left block vs right block."""
+    t = doc.add_table(rows=1, cols=2)
     t.autofit = True
-    for i, h in enumerate(headers):
-        c = t.rows[0].cells[i]
-        c.text = ""
-        p = c.paragraphs[0]
-        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        r = p.add_run(h)
-        r.bold = True
-        r.font.size = Pt(10)
-        _shade_cell(c, "DCE6F1")
-        _set_cell_border(c, top=6, bottom=6, left=6, right=6)
-        c.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
-    for ri, row in enumerate(edu):
-        cells = t.rows[ri + 1].cells
-        for ci, key in enumerate(["c1", "c2", "c3", "c4", "c5"]):
-            c = cells[ci]
-            c.text = ""
-            p = c.paragraphs[0]
-            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            r = p.add_run((row.get(key) or "").strip())
-            r.font.size = Pt(10)
-            _set_cell_border(c, top=4, bottom=4, left=4, right=4)
-            c.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+    t.columns[0].width = Inches(4.0)
+    t.columns[1].width = Inches(3.0)
+    lc, rc = t.rows[0].cells
+    pn = lc.paragraphs[0]
+    pn.paragraph_format.space_after = Pt(2)
+    r = pn.add_run(name or ""); r.bold = True; r.font.size = Pt(name_size)
+    for line in left_lines:
+        line = (line or "").strip()
+        if line: _p(lc, line, size=10, space_after=0)
+    for line in right_lines:
+        line = (line or "").strip()
+        if line: _p(rc, line, size=10, align="right", space_after=0)
+    for cell in (lc, rc):
+        _set_cell_border(cell, top=0, left=0, right=0, bottom=0)
+    return t
+
+
+def _declaration_footer(doc, name, place, date, size=11):
+    _p(doc, "I hereby declare that the above information is true to the best of my knowledge.",
+       size=size, align="justify")
+    p = doc.add_paragraph()
+    p.paragraph_format.space_before = Pt(6)
+    tabs = p.paragraph_format.tab_stops
+    tabs.add_tab_stop(Inches(5.5), WD_TAB_ALIGNMENT.RIGHT)
+    p.add_run(f"Place : {(place or '').strip()}").font.size = Pt(size)
+    p.add_run("\tSignature").font.size = Pt(size)
+    _p(doc, f"Date  : {(date or '').strip()}", size=size)
+    p3 = doc.add_paragraph()
+    p3.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    p3.paragraph_format.space_before = Pt(8)
+    p3.add_run(f"({(name or '').strip()})").font.size = Pt(size)
 
 
 # ============================================================
-#  FRESHER BUILDERS
+#  fresher_a  — Vijay Kumar style
 # ============================================================
 def build_fresher_a(d):
-    """Classic fresher — same proven layout, one page."""
     doc = Document()
-    _set_margins(doc, top=0.5, bottom=0.5, left=0.6, right=0.6)
-    style = doc.styles["Normal"]
-    style.font.size = Pt(11)
-    style.paragraph_format.space_after = Pt(2)
+    _set_margins(doc, top=0.5, bottom=0.5, left=0.65, right=0.65)
+    doc.styles["Normal"].font.size = Pt(11)
+    doc.styles["Normal"].paragraph_format.space_after = Pt(2)
 
     sec = d.get("enabled_sections", {})
-
-    p = doc.add_paragraph()
-    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    r = p.add_run("RESUME")
-    r.bold = True; r.underline = True; r.font.size = Pt(14)
-    p.paragraph_format.space_after = Pt(4)
-
-    name = (d.get("name") or "").strip()
+    name   = (d.get("name") or "").strip()
     father = (d.get("father") or "").strip()
-    _para(doc, name, bold=True, size=13)
+    gender = (d.get("gender") or "").strip().lower()
+    rel    = "S/o:" if "female" not in gender else "D/o."
+
+    # RESUME header
+    p = _p(doc, "RESUME", bold=True, size=14, align="center", space_after=4)
+    p.runs[0].underline = True
+
+    # Name + S/o on one line
+    p2 = doc.add_paragraph()
+    p2.paragraph_format.space_after = Pt(2)
+    r1 = p2.add_run(name + "  "); r1.bold = True; r1.font.size = Pt(12)
     if father:
-        _para(doc, f"D/O  {father}", size=11)
+        r2 = p2.add_run(rel + " " + father); r2.font.size = Pt(11)
 
     for line in [d.get("addr1"), d.get("addr2"), d.get("city")]:
-        line = (line or "").strip()
-        if line:
-            _para(doc, line, size=10, space_after=0)
+        if (line or "").strip():
+            _p(doc, line.strip(), size=11, space_after=0)
     if (d.get("mobile") or "").strip():
-        _para(doc, f"Mobile No : {d['mobile'].strip()}", size=10, space_after=0)
+        _p(doc, "Mobile No : " + d["mobile"].strip(), size=11, space_after=0)
     if (d.get("email") or "").strip():
-        _para(doc, f"Email Id  : {d['email'].strip()}", size=10)
+        _p(doc, "Mail ID   : " + d["email"].strip(), size=11)
     _hr(doc)
 
     if sec.get("objective", True):
-        _section_heading(doc, "CAREER OBJECTIVE:")
-        obj = (d.get("objective") or "").strip() or (
-            "To obtain a challenging and responsible position in an organisation "
-            "that contributes towards its growth using my abilities and knowledge.")
-        _para(doc, obj, size=11, align="justify")
+        p = doc.add_paragraph()
+        p.paragraph_format.space_after = Pt(3)
+        r = p.add_run("Career Objective : "); r.bold = True; r.font.size = Pt(11)
+        obj = (d.get("objective") or "To secure a challenging position where my skills are maximally utilized for self and the company.").strip()
+        p.add_run(obj).font.size = Pt(11)
 
     if sec.get("qualifications", True):
-        _section_heading(doc, "ACADEMIC QUALIFICATIONS:")
         quals = [q for q in (d.get("qualifications") or [])
-                 if (q.get("course") or "").strip() or (q.get("institute") or "").strip()]
-        if not quals:
-            _para(doc, "(No qualifications added.)", size=11, italic=True)
-        else:
+                 if (q.get("course") or "").strip()]
+        if quals:
+            _heading(doc, "Academic Qualification :")
             for q in quals:
-                course = (q.get("course") or "").strip()
-                inst   = (q.get("institute") or "").strip()
-                year   = (q.get("year") or "").strip()
-                line = course
-                if inst:  line += "   —   " + inst
-                if year:  line += f"   ({year})"
+                c = (q.get("course") or "").strip()
+                i = (q.get("institute") or "").strip()
+                y = (q.get("year") or "").strip()
+                line = c
+                if i: line += " from " + i
+                if y: line += " (" + y + ")"
+                line += "."
                 p = doc.add_paragraph()
-                p.paragraph_format.left_indent = Inches(0.25)
                 p.paragraph_format.space_after = Pt(1)
                 p.add_run(line).font.size = Pt(11)
 
     if sec.get("experience", True):
-        _section_heading(doc, "EXPERIENCE:")
-        _para(doc, "Fresher.", size=11)
+        exp = [x for x in (d.get("experience") or []) if str(x).strip()]
+        if exp:
+            _heading(doc, "Experience Summary :")
+            _bullet(doc, exp, prefix="• ")
+
+    if sec.get("job_desc", True):
+        jd = [x for x in (d.get("job_desc") or []) if str(x).strip()]
+        if jd:
+            _heading(doc, "Job Description & Responsibilities :")
+            _bullet(doc, jd, prefix="• ")
+
+    if sec.get("skills_inter", True):
+        si = [x for x in (d.get("skills_inter") or []) if str(x).strip()]
+        if si:
+            _heading(doc, "Inter Personal Skills :")
+            _bullet(doc, si, prefix="• ")
 
     if sec.get("profile", True):
-        _section_heading(doc, "PERSONAL PROFILE:")
-        for label, key in [
-            ("Date of Birth", "dob"), ("Gender", "gender"),
-            ("Nationality", "nationality"), ("Marital Status", "marital"),
-            ("Languages Known", "languages"), ("Hobbies", "hobbies"),
-        ]:
+        _heading(doc, "Personal Details :")
+        # Compact inline style: two fields per line
+        lines = []
+        # Line 1: Name + Father + DOB
+        l1 = []
+        if name: l1.append("Name : " + name)
+        if father: l1.append(rel.rstrip(":") + "  : " + father)
+        if (d.get("dob") or "").strip(): l1.append("D.O.B : " + d["dob"].strip())
+        if l1:
+            p = doc.add_paragraph()
+            p.paragraph_format.space_after = Pt(2)
+            p.add_run("  ".join(l1)).font.size = Pt(11)
+        # Line 2: Languages + Marital
+        l2 = []
+        if (d.get("languages") or "").strip(): l2.append("Languages Known : " + d["languages"].strip())
+        if (d.get("marital") or "").strip(): l2.append("Marital Status : " + d["marital"].strip())
+        if l2:
+            p = doc.add_paragraph(); p.paragraph_format.space_after = Pt(2)
+            p.add_run("  ".join(l2)).font.size = Pt(11)
+        # Remaining
+        for label, key in [("Gender", "gender"), ("Nationality", "nationality"),
+                            ("Religion", "religion"), ("Hobbies", "hobbies")]:
             v = (d.get(key) or "").strip()
             if v:
-                _kv_dotted(doc, label, v, size=11, label_w=1.7)
+                p = doc.add_paragraph(); p.paragraph_format.space_after = Pt(2)
+                r1 = p.add_run(label + " : "); r1.bold = True; r1.font.size = Pt(11)
+                p.add_run(v).font.size = Pt(11)
 
     if sec.get("declaration", True):
-        _section_heading(doc, "DECLARATION:")
-        _para(doc, "I hereby declare that the information furnished above is true to the best of my knowledge.",
-              size=11, align="justify")
-        place = (d.get("place") or "").strip()
-        date  = (d.get("date") or "").strip()
-        p = doc.add_paragraph()
-        p.paragraph_format.space_before = Pt(6)
-        tabs = p.paragraph_format.tab_stops
-        tabs.add_tab_stop(Inches(5.5), WD_TAB_ALIGNMENT.RIGHT)
-        p.add_run(f"Place : {place}").font.size = Pt(11)
-        p.add_run("\tSignature").font.size = Pt(11)
-        p2 = doc.add_paragraph()
-        p2.add_run(f"Date  : {date}").font.size = Pt(11)
-        p3 = doc.add_paragraph()
-        p3.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-        p3.paragraph_format.space_before = Pt(8)
-        p3.add_run(f"({name})").font.size = Pt(11)
+        _heading(doc, "Declaration :")
+        _declaration_footer(doc, name, d.get("place"), d.get("date"))
 
     return doc
 
 
+# ============================================================
+#  fresher_b  — Compact centered style
+# ============================================================
 def build_fresher_b(d):
-    """Compact fresher — slightly different header style, tabular qualifications."""
     doc = Document()
     _set_margins(doc, top=0.5, bottom=0.5, left=0.65, right=0.65)
-    style = doc.styles["Normal"]
-    style.font.size = Pt(11)
-    style.paragraph_format.space_after = Pt(2)
+    doc.styles["Normal"].font.size = Pt(11)
+    doc.styles["Normal"].paragraph_format.space_after = Pt(2)
 
     sec = d.get("enabled_sections", {})
     name = (d.get("name") or "").strip()
 
-    # Large centered name
-    p = doc.add_paragraph()
-    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    r = p.add_run(name)
-    r.bold = True; r.font.size = Pt(16)
-    p.paragraph_format.space_after = Pt(2)
-
-    # Contact line centered
-    contact_parts = []
-    if (d.get("mobile") or "").strip():  contact_parts.append(d["mobile"].strip())
-    if (d.get("email") or "").strip():   contact_parts.append(d["email"].strip())
-    if contact_parts:
-        _para(doc, "  |  ".join(contact_parts), size=10, align="center")
-
-    # Address line
-    addr = [x for x in [d.get("addr1"), d.get("addr2"), d.get("city")] if (x or "").strip()]
-    if addr:
-        _para(doc, ", ".join(a.strip() for a in addr), size=10, align="center", space_after=4)
-    _hr(doc)
-
+    p = _p(doc, name, bold=True, size=16, align="center", space_after=2)
     father = (d.get("father") or "").strip()
     if father:
-        _para(doc, f"D/O  {father}", size=11)
+        gender = (d.get("gender") or "").strip().lower()
+        rel = "D/o." if "female" in gender else "S/o."
+        _p(doc, rel + "  " + father, size=11, align="center", space_after=1)
+    parts = []
+    if (d.get("mobile") or "").strip(): parts.append(d["mobile"].strip())
+    if (d.get("email") or "").strip():  parts.append(d["email"].strip())
+    if parts: _p(doc, "  |  ".join(parts), size=10, align="center", space_after=1)
+    addr = [x for x in [d.get("addr1"), d.get("addr2"), d.get("city")] if (x or "").strip()]
+    if addr: _p(doc, ", ".join(a.strip() for a in addr), size=10, align="center", space_after=4)
+    _hr(doc)
 
     if sec.get("objective", True):
-        _section_heading(doc, "CAREER OBJECTIVE:")
-        obj = (d.get("objective") or "").strip() or (
-            "Seeking a challenging position to apply my skills and contribute "
-            "to organisational growth while furthering my professional development.")
-        _para(doc, obj, size=11, align="justify")
+        _heading(doc, "CAREER OBJECTIVE")
+        _p(doc, (d.get("objective") or "Seeking a challenging position to contribute and grow within an organisation.").strip(), size=11, align="justify")
 
     if sec.get("qualifications", True):
-        _section_heading(doc, "ACADEMIC QUALIFICATIONS:")
-        quals = [q for q in (d.get("qualifications") or [])
-                 if (q.get("course") or "").strip() or (q.get("institute") or "").strip()]
+        quals = [q for q in (d.get("qualifications") or []) if (q.get("course") or "").strip()]
         if quals:
+            _heading(doc, "ACADEMIC QUALIFICATIONS")
             t = doc.add_table(rows=1 + len(quals), cols=3)
             t.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            t.autofit = True
             for i, h in enumerate(["Qualification", "Institution", "Year"]):
-                c = t.rows[0].cells[i]
-                c.text = ""
-                p = c.paragraphs[0]
-                p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                r2 = p.add_run(h); r2.bold = True; r2.font.size = Pt(10)
-                _shade_cell(c, "DCE6F1")
-                _set_cell_border(c, top=6, bottom=6, left=6, right=6)
+                c = t.rows[0].cells[i]; c.text = ""
+                p2 = c.paragraphs[0]; p2.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                r = p2.add_run(h); r.bold = True; r.font.size = Pt(10)
+                _shade_cell(c, "DCE6F1"); _set_cell_border(c, top=6, bottom=6, left=6, right=6)
             for ri, q in enumerate(quals):
-                cells = t.rows[ri + 1].cells
                 for ci, key in enumerate(["course", "institute", "year"]):
-                    c = cells[ci]; c.text = ""
-                    p = c.paragraphs[0]
-                    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                    p.add_run((q.get(key) or "").strip()).font.size = Pt(10)
+                    c = t.rows[ri+1].cells[ci]; c.text = ""
+                    p2 = c.paragraphs[0]; p2.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                    p2.add_run((q.get(key) or "").strip()).font.size = Pt(10)
                     _set_cell_border(c, top=4, bottom=4, left=4, right=4)
 
     if sec.get("experience", True):
-        _section_heading(doc, "EXPERIENCE:")
-        _para(doc, "Fresher.", size=11)
+        exp = [x for x in (d.get("experience") or []) if str(x).strip()]
+        _heading(doc, "EXPERIENCE")
+        if exp: _bullet(doc, exp)
+        else: _p(doc, "Fresher.", size=11)
 
     if sec.get("profile", True):
-        _section_heading(doc, "PERSONAL PROFILE:")
-        for label, key in [
-            ("Date of Birth", "dob"), ("Gender", "gender"),
-            ("Nationality", "nationality"), ("Marital Status", "marital"),
-            ("Languages Known", "languages"), ("Hobbies", "hobbies"),
-        ]:
-            v = (d.get(key) or "").strip()
-            if v:
-                _kv_dotted(doc, label, v, size=11, label_w=1.7)
+        _heading(doc, "PERSONAL PROFILE")
+        for label, key in [("Date of Birth", "dob"), ("Gender", "gender"),
+                            ("Nationality", "nationality"), ("Marital Status", "marital"),
+                            ("Languages Known", "languages"), ("Hobbies", "hobbies")]:
+            _kv(doc, label, (d.get(key) or ""))
 
     if sec.get("declaration", True):
-        _section_heading(doc, "DECLARATION:")
-        _para(doc, "I hereby declare that the information furnished above is true to the best of my knowledge.",
-              size=11, align="justify")
-        place = (d.get("place") or "").strip()
-        date  = (d.get("date") or "").strip()
-        p = doc.add_paragraph()
-        p.paragraph_format.space_before = Pt(6)
-        tabs = p.paragraph_format.tab_stops
-        tabs.add_tab_stop(Inches(5.5), WD_TAB_ALIGNMENT.RIGHT)
-        p.add_run(f"Place : {place}").font.size = Pt(11)
-        p.add_run("\tSignature").font.size = Pt(11)
-        p2 = doc.add_paragraph()
-        p2.add_run(f"Date  : {date}").font.size = Pt(11)
-        p3 = doc.add_paragraph()
-        p3.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-        p3.paragraph_format.space_before = Pt(8)
-        p3.add_run(f"({name})").font.size = Pt(11)
+        _heading(doc, "DECLARATION")
+        _declaration_footer(doc, name, d.get("place"), d.get("date"))
 
     return doc
 
 
 # ============================================================
-#  ORDINARY BUILDERS
+#  ordinary_a  — Karri Karthik style
 # ============================================================
 def build_ordinary_a(d):
-    """Ordinary — Professional layout (address header + 5-col edu + experience)."""
     doc = Document()
     _set_margins(doc, top=0.6, bottom=0.6, left=0.7, right=0.7)
-    style = doc.styles["Normal"]
-    style.font.size = Pt(11)
-    style.paragraph_format.space_after = Pt(2)
+    doc.styles["Normal"].font.size = Pt(11)
+    doc.styles["Normal"].paragraph_format.space_after = Pt(2)
 
     sec = d.get("enabled_sections", {})
-    name = (d.get("name") or "").strip()
+    name   = (d.get("name") or "").strip()
+    father = (d.get("father") or "").strip()
+    gender = (d.get("gender") or "").strip().lower()
+    rel    = "D/O" if "female" in gender else "S/O"
 
-    p = doc.add_paragraph()
-    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    r = p.add_run("RESUME")
-    r.bold = True; r.underline = True; r.font.size = Pt(15)
+    # Header
+    _p(doc, "RESUME", bold=True, size=15, align="center", underline=False)
 
-    addr_lines = [d.get("addr1"), d.get("addr2"), d.get("city")]
-    contact_lines = []
-    if (d.get("mobile") or "").strip():
-        contact_lines.append("Mobile : " + d["mobile"].strip())
-    if (d.get("email") or "").strip():
-        contact_lines.append("Mail Id : " + d["email"].strip())
-    _hdr_contact_table(doc, name, addr_lines, contact_lines, name_size=15)
-    _hr(doc)
+    # Large name, then S/O line, then address
+    p_name = doc.add_paragraph()
+    p_name.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p_name.paragraph_format.space_after = Pt(2)
+    r = p_name.add_run(name); r.bold = True; r.font.size = Pt(14)
 
-    if sec.get("objective", True):
-        _section_heading(doc, "CAREER OBJECTIVE")
-        obj = (d.get("objective") or "").strip() or (
-            "Looking for a growth-oriented organisation to contribute my services "
-            "thereby developing as an effective professional.")
-        _para(doc, obj, size=11, align="justify")
+    if father:
+        p_rel = doc.add_paragraph()
+        p_rel.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        p_rel.paragraph_format.space_after = Pt(2)
+        p_rel.add_run(rel + " " + father).font.size = Pt(11)
 
-    if sec.get("education", True):
-        _section_heading(doc, "EDUCATIONAL QUALIFICATION")
-        headers = ["ACADEMIC\nQUALIFICATION", "NAME OF INSTITUTE",
-                   "BOARD / UNIVERSITY", "YEAR OF PASSING", "PERCENTAGE"]
-        _edu_table_5col(doc, d.get("education") or [], headers)
+    # Address + contact two-col
+    addr_parts = [x.strip() for x in [d.get("addr1"), d.get("addr2"), d.get("city")] if (x or "").strip()]
+    contact_parts = []
+    if (d.get("email") or "").strip():  contact_parts.append("email : " + d["email"].strip())
+    if (d.get("mobile") or "").strip(): contact_parts.append("Phone : +" + d["mobile"].strip().lstrip("+"))
 
-    if sec.get("experience", True):
-        work = [x for x in (d.get("experience") or []) if x.strip()]
-        _section_heading(doc, "EXPERIENCE")
-        if work:
-            _bullets(doc, work)
-        else:
-            _para(doc, "Fresher.", size=11)
+    if addr_parts or contact_parts:
+        t = doc.add_table(rows=1, cols=2)
+        t.autofit = True
+        lc, rc = t.rows[0].cells
+        for line in addr_parts:
+            _p(lc, line, size=10, space_after=0)
+        for line in contact_parts:
+            _p(rc, line, size=10, align="right", space_after=0)
+        for cell in (lc, rc):
+            _set_cell_border(cell, top=0, left=0, right=0, bottom=0)
 
-    if sec.get("strengths", True):
-        strengths = [s for s in (d.get("strengths") or []) if s.strip()]
-        if strengths:
-            _section_heading(doc, "STRENGTHS")
-            _bullets(doc, strengths)
-
-    if sec.get("profile", True):
-        _section_heading(doc, "PERSONAL PROFILE")
-        for label, key in [
-            ("Name", "name"), ("Father's Name", "father"),
-            ("Date of Birth", "dob"), ("Gender", "gender"),
-            ("Nationality", "nationality"), ("Marital Status", "marital"),
-            ("Languages Known", "languages"), ("Hobbies", "hobbies"),
-        ]:
-            v = (d.get(key) or "").strip()
-            if v:
-                _kv_dotted(doc, label, v, size=11, label_w=1.7)
-
-    if sec.get("declaration", True):
-        _section_heading(doc, "DECLARATION")
-        _para(doc, "I hereby declare that the above information is true to the best of my knowledge.",
-              size=11, align="justify")
-        place = (d.get("place") or "").strip()
-        date  = (d.get("date") or "").strip()
-        p = doc.add_paragraph()
-        p.paragraph_format.space_before = Pt(6)
-        tabs = p.paragraph_format.tab_stops
-        tabs.add_tab_stop(Inches(5.5), WD_TAB_ALIGNMENT.RIGHT)
-        p.add_run(f"Place : {place}").font.size = Pt(11)
-        p.add_run("\tSignature").font.size = Pt(11)
-        p2 = doc.add_paragraph()
-        p2.add_run(f"Date  : {date}").font.size = Pt(11)
-        p3 = doc.add_paragraph()
-        p3.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-        p3.paragraph_format.space_before = Pt(8)
-        p3.add_run(f"({name})").font.size = Pt(11)
-
-    return doc
-
-
-def build_ordinary_b(d):
-    """Ordinary — Detailed layout (large name header + technical skills + religion)."""
-    doc = Document()
-    _set_margins(doc, top=0.7, bottom=0.7, left=0.8, right=0.8)
-    style = doc.styles["Normal"]
-    style.font.size = Pt(11)
-    style.paragraph_format.space_after = Pt(2)
-
-    sec = d.get("enabled_sections", {})
-    name = (d.get("name") or "").strip()
-
-    p = doc.add_paragraph()
-    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    r = p.add_run("RESUME")
-    r.bold = True; r.underline = True; r.font.size = Pt(15)
-    p.paragraph_format.space_after = Pt(4)
-
-    contact = []
-    if (d.get("email") or "").strip():  contact.append("Email: " + d["email"].strip())
-    if (d.get("mobile") or "").strip(): contact.append("Cell: " + d["mobile"].strip())
-    _hdr_contact_table(doc, name, [], contact, name_size=14)
+    doc.add_paragraph().paragraph_format.space_after = Pt(2)
 
     if sec.get("objective", True):
-        _section_heading(doc, "CAREER OBJECTIVE:")
-        obj = (d.get("objective") or "").strip() or (
-            "To obtain a challenging and responsible position in an organisation, "
-            "contributing towards its growth using my abilities and knowledge.")
-        _para(doc, obj, size=11, align="justify")
+        _heading(doc, "CAREER OBJECTIVE :", size=11)
+        obj = (d.get("objective") or "To work in an organisation that will give me a platform to utilise my knowledge and enrich my expertise in the process of growing the organisation and myself.").strip()
+        _p(doc, obj, size=11, align="justify")
 
     if sec.get("education", True):
-        _section_heading(doc, "EDUCATIONAL QUALIFICATION:")
-        headers = ["Qualification", "University / College Name", "Specialization",
-                   "Percentage / Marks", "Year of Passing"]
-        edu = d.get("education") or []
-        edu_f = [e for e in edu if any((e.get(k) or "").strip()
-                                       for k in ("c1","c2","c3","c4","c5"))]
-        if not edu_f:
-            _para(doc, "(No education rows added.)", size=11, italic=True)
+        _heading(doc, "EDUCATIONAL QUALIFICATIONS :", size=11)
+        edu = [e for e in (d.get("education") or [])
+               if any((e.get(k) or "").strip() for k in ("c1","c2","c3","c4","c5"))]
+        if not edu:
+            _p(doc, "(No education rows added.)", italic=True)
         else:
-            widths = [Inches(1.1), Inches(2.0), Inches(1.3), Inches(1.0), Inches(1.1)]
-            t = doc.add_table(rows=1 + len(edu_f), cols=5)
+            headers = ["Course (Stream)/\nExamination", "Institution",
+                       "UNIVERSITY / BOARD", "Year of\nPassing", "Percentage\nmarks"]
+            t = doc.add_table(rows=1 + len(edu), cols=5)
             t.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            for col, w in zip(t.columns, widths):
-                col.width = w
             for i, h in enumerate(headers):
-                c = t.rows[0].cells[i]
-                c.text = ""; c.width = widths[i]
+                c = t.rows[0].cells[i]; c.text = ""
                 p2 = c.paragraphs[0]; p2.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                r2 = p2.add_run(h); r2.bold = True; r2.font.size = Pt(10)
+                r2 = p2.add_run(h); r2.bold = True; r2.font.size = Pt(9)
                 _shade_cell(c, "DCE6F1"); _set_cell_border(c, top=6, bottom=6, left=6, right=6)
                 c.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
-            for ri, row in enumerate(edu_f):
-                cells = t.rows[ri + 1].cells
+            for ri, row in enumerate(edu):
                 for ci, key in enumerate(["c1","c2","c3","c4","c5"]):
-                    c = cells[ci]; c.width = widths[ci]; c.text = ""
+                    c = t.rows[ri+1].cells[ci]; c.text = ""
                     p2 = c.paragraphs[0]; p2.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                    p2.add_run((row.get(key) or "").strip()).font.size = Pt(10)
+                    p2.add_run((row.get(key) or "").strip()).font.size = Pt(9)
                     _set_cell_border(c, top=4, bottom=4, left=4, right=4)
                     c.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
 
-    if sec.get("experience", True):
-        work = [x for x in (d.get("experience") or []) if x.strip()]
-        _section_heading(doc, "WORK EXPERIENCE:")
-        if work:
-            _bullets(doc, work)
-        else:
-            _para(doc, "Fresher.", size=11)
-
-    if sec.get("skills", True):
-        skills = [s for s in (d.get("skills") or [])
-                  if (s.get("label") or "").strip() or (s.get("value") or "").strip()]
-        if skills:
-            _section_heading(doc, "TECHNICAL SKILLS:")
-            for s in skills:
-                label = (s.get("label") or "").strip()
-                value = (s.get("value") or "").strip()
-                p2 = doc.add_paragraph()
-                p2.paragraph_format.left_indent = Inches(0.35)
-                p2.paragraph_format.space_after = Pt(2)
-                tabs = p2.paragraph_format.tab_stops
-                tabs.add_tab_stop(Inches(2.6), WD_TAB_ALIGNMENT.LEFT)
-                p2.add_run("•  ").font.size = Pt(11)
-                p2.add_run(label).font.size = Pt(11)
-                p2.add_run(f"\t: {value}").font.size = Pt(11)
+    if sec.get("comp_skills", True):
+        cs = [x for x in (d.get("comp_skills") or []) if str(x).strip()]
+        if cs:
+            _heading(doc, "COMPUTER SKILLS :", size=11)
+            _bullet(doc, cs)
 
     if sec.get("strengths", True):
-        strengths = [s for s in (d.get("strengths") or []) if s.strip()]
-        if strengths:
-            _section_heading(doc, "STRENGTHS:")
-            for s in strengths:
-                p2 = doc.add_paragraph()
-                p2.paragraph_format.left_indent = Inches(0.35)
-                p2.paragraph_format.space_after = Pt(2)
-                p2.add_run("➢  " + s).font.size = Pt(11)
+        st = [x for x in (d.get("strengths") or []) if str(x).strip()]
+        if st:
+            _heading(doc, "STRENGTHS :", size=11)
+            _bullet(doc, st)
+
+    if sec.get("hobbies", True):
+        hb = [x for x in (d.get("hobbies_list") or []) if str(x).strip()]
+        if hb:
+            _heading(doc, "HOBBIES", size=11)
+            _bullet(doc, hb)
 
     if sec.get("profile", True):
-        _section_heading(doc, "PERSONAL DETAILS:")
-        profile_fields = [
-            ("Name", "name"), ("Father's Name", "father"),
-            ("Date of Birth", "dob"), ("Gender", "gender"),
-            ("Religion", "religion"), ("Marital Status", "marital"),
-            ("Nationality", "nationality"), ("Languages Known", "languages"),
-            ("Hobbies", "hobbies"),
-        ]
-        for label, key in profile_fields:
+        _heading(doc, "PERSONAL PROFILE :", size=11)
+        # First line: NAME  FATHER/HUSBAND NAME  GENDER (inline)
+        line1 = []
+        if name:   line1.append("NAME  :  " + name)
+        rel_lbl = "HUSBAND NAME" if (d.get("marital") or "").lower() == "married" else "FATHER NAME"
+        if father: line1.append(rel_lbl + "  :  " + father)
+        if (d.get("gender") or "").strip(): line1.append("GENDER  :  " + d["gender"].strip().upper())
+        if line1:
+            p = doc.add_paragraph()
+            p.paragraph_format.space_after = Pt(2)
+            p.add_run("  ".join(line1)).font.size = Pt(11)
+        for label, key in [("DATE OF BIRTH", "dob"), ("MARITAL STATUS", "marital"),
+                            ("LANGUAGES", "languages"), ("NATIONALITY", "nationality")]:
             v = (d.get(key) or "").strip()
             if v:
-                _kv_dotted(doc, label, v, size=11, label_w=1.9)
-
-        addr = [(d.get(k) or "").strip() for k in ("addr1","addr2","city")]
-        addr = [a for a in addr if a]
-        if addr:
-            p2 = doc.add_paragraph()
-            p2.paragraph_format.space_after = Pt(2)
-            r1 = p2.add_run("Communication Address"); r1.bold = True; r1.font.size = Pt(11)
-            tabs = p2.paragraph_format.tab_stops
-            tabs.add_tab_stop(Inches(1.9), WD_TAB_ALIGNMENT.LEFT)
-            r2 = p2.add_run("\t: " + addr[0]); r2.font.size = Pt(11)
-            for line in addr[1:]:
-                p3 = doc.add_paragraph()
-                p3.paragraph_format.space_after = Pt(0)
-                p3.paragraph_format.left_indent = Inches(2.05)
-                p3.add_run(line).font.size = Pt(11)
+                p = doc.add_paragraph(); p.paragraph_format.space_after = Pt(2)
+                r1 = p.add_run(label); r1.bold = True; r1.font.size = Pt(11)
+                tabs = p.paragraph_format.tab_stops
+                tabs.add_tab_stop(Inches(1.8), WD_TAB_ALIGNMENT.LEFT)
+                p.add_run("\t:  " + v).font.size = Pt(11)
+        # Address
+        addr_str = "  ".join(x.strip() for x in [d.get("addr1"), d.get("addr2"), d.get("city")] if (x or "").strip())
+        if addr_str:
+            _kv(doc, "Address", addr_str, lw=1.8)
 
     if sec.get("declaration", True):
-        _section_heading(doc, "DECLARATION:")
-        _para(doc, "I hereby declare that the above information is true to the best of my knowledge.",
-              size=11, align="justify")
-        place = (d.get("place") or "").strip()
-        date  = (d.get("date") or "").strip()
+        _heading(doc, "DECLARATION :", size=11)
+        _p(doc, "I hereby declare that the information given above is true to the best of my knowledge belief.", size=11, align="justify")
+        p = doc.add_paragraph()
+        p.paragraph_format.space_before = Pt(6)
+        p.add_run("DATE :").font.size = Pt(11)
         p2 = doc.add_paragraph()
-        p2.paragraph_format.space_before = Pt(8)
+        p2.paragraph_format.space_after = Pt(6)
+        p2.add_run("PLACE : " + (d.get("place") or "VISAKHAPATNAM")).font.size = Pt(11)
+        p3 = doc.add_paragraph(); p3.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+        p3.add_run("(" + name + ")").font.size = Pt(11)
+
+    return doc
+
+
+# ============================================================
+#  ordinary_b  — Emandi Kanaka style (personal details FIRST)
+# ============================================================
+def build_ordinary_b(d):
+    doc = Document()
+    _set_margins(doc, top=0.65, bottom=0.65, left=0.75, right=0.75)
+    doc.styles["Normal"].font.size = Pt(11)
+    doc.styles["Normal"].paragraph_format.space_after = Pt(2)
+
+    sec = d.get("enabled_sections", {})
+    name   = (d.get("name") or "").strip()
+    father = (d.get("father") or "").strip()
+    gender = (d.get("gender") or "").strip().lower()
+    rel    = "D/o." if "female" in gender else "S/o."
+
+    # RESUME centered
+    p = _p(doc, "RESUME", bold=True, size=15, align="center", space_after=4)
+    p.runs[0].underline = True
+
+    # Header two-col: name+relation+address left, Cell: right
+    name_line = name
+    if father: name_line += "  " + rel + " " + father
+    addr_lines = [x.strip() for x in [d.get("addr1"), d.get("addr2"), d.get("city")] if (x or "").strip()]
+    contact_lines = []
+    if (d.get("mobile") or "").strip(): contact_lines.append("Cell: " + d["mobile"].strip())
+    if (d.get("email") or "").strip():  contact_lines.append("Email: " + d["email"].strip())
+    _two_col_header(doc, name_line, addr_lines, contact_lines, name_size=13)
+
+    if sec.get("profile", True):
+        _heading(doc, "PERSONAL DETAILS :", size=11)
+        for label, key in [
+            ("Name", "name"), ("Father Name", "father"),
+            ("Date of Birth", "dob"), ("Gender", "gender"),
+            ("Marital Status", "marital"), ("Religion", "religion"),
+            ("Nationality", "nationality"), ("Languages Known", "languages"),
+        ]:
+            _kv(doc, label, (d.get(key) or ""), lw=1.8)
+
+    if sec.get("education", True):
+        _heading(doc, "EDUCATION QUALIFICATION :", size=11)
+        quals = [q for q in (d.get("qualifications") or []) if (q.get("course") or "").strip()]
+        if quals:
+            for q in quals:
+                c = (q.get("course") or "").strip()
+                i = (q.get("institute") or "").strip()
+                y = (q.get("year") or "").strip()
+                line = c
+                if i: line += " from " + i
+                if y: line += " (" + y + ")"
+                line += "."
+                p = doc.add_paragraph()
+                p.paragraph_format.space_after = Pt(1)
+                p.paragraph_format.left_indent = Inches(0.3)
+                p.add_run("•  " + line).font.size = Pt(11)
+
+    if sec.get("comp_skills", True):
+        cs = [x for x in (d.get("comp_skills") or []) if str(x).strip()]
+        if cs:
+            _heading(doc, "COMPUTER SKILLS :", size=11)
+            _bullet(doc, cs)
+
+    if sec.get("experience", True):
+        exp = [x for x in (d.get("experience") or []) if str(x).strip()]
+        if exp:
+            _heading(doc, "Previous work experience :", size=11)
+            _bullet(doc, exp)
+
+    if sec.get("objective", True):
+        _heading(doc, "CAREER OBJECTIVE :", size=11)
+        obj = (d.get("objective") or "To enjoy work while working in an esteemed organisation with scope to learn and grow.").strip()
+        _p(doc, obj, size=11, align="justify")
+
+    if sec.get("strengths", True):
+        st = [x for x in (d.get("strengths") or []) if str(x).strip()]
+        if st:
+            _heading(doc, "PERSONAL STRENGTHS :", size=11)
+            _bullet(doc, st)
+
+    if sec.get("hobbies", True):
+        hb = [x for x in (d.get("hobbies_list") or []) if str(x).strip()]
+        if hb:
+            _heading(doc, "HOBBIES :", size=11)
+            _bullet(doc, hb)
+
+    if sec.get("declaration", True):
+        _heading(doc, "DECLARATION :", size=11)
+        _p(doc, "I hereby declare that the above written particulars are true to the best of my knowledge and belief.", size=11, align="justify")
+        p = doc.add_paragraph(); p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        p.paragraph_format.space_before = Pt(10)
+        p.add_run("(" + name + ")").font.size = Pt(11)
+        p2 = doc.add_paragraph()
+        p2.paragraph_format.space_after = Pt(0)
         tabs = p2.paragraph_format.tab_stops
-        tabs.add_tab_stop(Inches(5.5), WD_TAB_ALIGNMENT.RIGHT)
-        p2.add_run(f"Place : {place}").font.size = Pt(11)
-        p2.add_run("\tSignature").font.size = Pt(11)
-        p3 = doc.add_paragraph()
-        p3.add_run(f"Date  : {date}").font.size = Pt(11)
-        p4 = doc.add_paragraph()
-        p4.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-        p4.paragraph_format.space_before = Pt(8)
-        p4.add_run(f"({name})").font.size = Pt(11)
+        tabs.add_tab_stop(Inches(5.0), WD_TAB_ALIGNMENT.RIGHT)
+        p2.add_run("Place: " + (d.get("place") or "").strip()).font.size = Pt(11)
+        p2.add_run("\tDate: " + (d.get("date") or "").strip()).font.size = Pt(11)
 
     return doc
 
@@ -687,15 +604,15 @@ BUILDERS = {
     "ordinary_b": build_ordinary_b,
 }
 
+
 # ============================================================
 #  Routes
 # ============================================================
 @bp.route("/resume")
 def page():
-    edu_options = _load_edu_options()
     return render_template("tool_resume.html",
                            templates=TEMPLATES,
-                           edu_options=edu_options)
+                           edu_options=_load_edu_options())
 
 
 @bp.route("/resume/edu-options", methods=["GET"])
@@ -711,14 +628,12 @@ def set_edu_options():
         return jsonify({"error": "options must be a list"})
     opts = [str(o).strip() for o in opts if str(o).strip()]
     try:
-        with open(OVERRIDES_PATH_RESUME) as f:
+        with open(OVERRIDES_PATH) as f:
             data = json.load(f)
     except Exception:
         data = {}
-    if "resume" not in data:
-        data["resume"] = {}
-    data["resume"]["edu_options"] = opts
-    with open(OVERRIDES_PATH_RESUME, "w") as f:
+    data.setdefault("resume", {})["edu_options"] = opts
+    with open(OVERRIDES_PATH, "w") as f:
         json.dump(data, f, indent=2)
     return jsonify({"ok": True, "options": opts})
 
@@ -729,16 +644,19 @@ def build():
     tpl_key = j.get("template")
     if tpl_key not in BUILDERS:
         return jsonify({"error": f"Unknown template: {tpl_key}"})
-
     fields = j.get("fields") or {}
     payload = dict(fields)
-    payload["education"]         = j.get("education") or []
-    payload["experience"]        = j.get("experience") or []
-    payload["strengths"]         = j.get("strengths") or []
-    payload["skills"]            = j.get("skills") or []
-    payload["qualifications"]    = j.get("qualifications") or []
-    payload["enabled_sections"]  = j.get("enabled_sections") or {}
-
+    payload.update({
+        "education":        j.get("education")     or [],
+        "experience":       j.get("experience")    or [],
+        "strengths":        j.get("strengths")     or [],
+        "comp_skills":      j.get("comp_skills")   or [],
+        "qualifications":   j.get("qualifications") or [],
+        "job_desc":         j.get("job_desc")      or [],
+        "skills_inter":     j.get("skills_inter")  or [],
+        "hobbies_list":     j.get("hobbies_list")  or [],
+        "enabled_sections": j.get("enabled_sections") or {},
+    })
     try:
         doc = BUILDERS[tpl_key](payload)
     except Exception as e:
@@ -746,8 +664,8 @@ def build():
 
     safe_name = (fields.get("name") or "resume").strip().replace(" ", "_")
     safe_name = "".join(c for c in safe_name if c.isalnum() or c in "-_") or "resume"
-    variant_label = TEMPLATES.get(tpl_key, {}).get("label", tpl_key).replace(" ", "_").replace("—", "-")
-    out_name = f"{safe_name}_{variant_label}_{int(time.time())}.docx"
+    variant = TEMPLATES.get(tpl_key, {}).get("label", tpl_key).replace(" ", "_").replace("—", "-")
+    out_name = f"{safe_name}_{variant}_{int(time.time())}.docx"
     out_path = os.path.join(OUTPUT_DIR, out_name)
     doc.save(out_path)
     return jsonify({"out": f"/file/{out_name}", "name": out_name})

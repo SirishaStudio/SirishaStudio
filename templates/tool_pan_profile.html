@@ -6,28 +6,73 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 <script src="{{ url_for('static', filename='js/theme.js') }}"></script>
 <style>
-  .pan-page { max-width:960px; margin:0 auto; padding:0 12px; }
-  .save-bar { display:flex;gap:8px;justify-content:center;margin:12px 0; }
-  .tab-bar { display:flex;gap:4px;max-width:960px;margin:0 auto 14px;padding:0 12px; }
+  .tab-bar { display:flex;gap:4px;max-width:960px;margin:0 auto 0;padding:0 12px; }
   .tab-btn { flex:1; padding:8px; border:1px solid var(--border); border-radius:8px 8px 0 0;
     background:var(--panel-2); color:var(--muted); cursor:pointer; font-size:12px; font-weight:600;
-    transition:all .15s; }
-  .tab-btn.active { background:var(--panel); color:var(--accent); border-bottom-color:var(--panel); }
+    transition:all .15s; border-bottom:none; }
+  .tab-btn.active { background:var(--panel); color:var(--accent); }
   .tab-pane { display:none; }
   .tab-pane.active { display:block; }
-  .conv-result { margin-top:8px; padding:8px; background:var(--input-bg);
-    border:1px solid var(--border); border-radius:6px; font-size:11px; }
-  .conv-result a { color:var(--accent); font-weight:600; }
+  .tab-wrap { max-width:960px; margin:0 auto; background:var(--panel);
+    border:1px solid var(--border); border-radius:0 0 12px 12px; padding:14px 16px;
+    box-shadow:0 2px 10px var(--shadow); }
   .notice { background:rgba(68,114,245,.08); border:1px solid rgba(68,114,245,.25);
-    border-radius:8px; padding:8px 12px; font-size:11px; color:var(--muted);
-    margin-bottom:12px; line-height:1.6; }
+    border-radius:8px; padding:8px 12px; font-size:11px; color:var(--muted); margin-bottom:12px; line-height:1.6; }
   .name-group { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; }
   @media(max-width:600px){ .name-group{grid-template-columns:1fr;} }
   .full-row { grid-column:1/-1; }
+  .save-bar { display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:12px 0; }
+  .save-bar input { flex:1; min-width:200px; background:var(--input-bg); border:1px solid var(--border);
+    color:var(--text); padding:7px 10px; border-radius:8px; font-size:12px; }
+
+  /* Saved profiles list */
+  .profiles-head {
+    display:flex; align-items:center; gap:8px; cursor:pointer;
+    padding:8px 12px; background:var(--panel-2); border:1px solid var(--border);
+    border-radius:10px; margin-top:16px; user-select:none;
+  }
+  .profiles-head h4 { margin:0; font-size:13px; color:var(--accent); flex:1; }
+  .profiles-head span { color:var(--muted); font-size:11px; }
+  .profiles-body { margin-top:6px; display:flex; flex-direction:column; gap:8px; }
+  .profile-card {
+    background:var(--panel); border:1px solid var(--border); border-radius:10px;
+    box-shadow:0 1px 4px var(--shadow); overflow:hidden;
+  }
+  .profile-card-head {
+    display:flex; align-items:center; gap:8px; padding:8px 12px;
+    background:var(--panel-2); border-bottom:1px solid var(--border);
+  }
+  .profile-card-head strong { flex:1; font-size:13px; }
+  .profile-card-head .ts { color:var(--muted); font-size:10px; }
+  .profile-card-head .load-btn {
+    background:var(--accent); color:#fff; border:none; border-radius:6px;
+    padding:4px 12px; font-size:11px; cursor:pointer; font-weight:600;
+  }
+  .profile-card-head .del-btn {
+    background:transparent; border:1px solid var(--danger); color:var(--danger);
+    border-radius:6px; padding:4px 10px; font-size:11px; cursor:pointer;
+  }
+  .profile-card-fields {
+    display:grid; grid-template-columns:repeat(auto-fill, minmax(260px,1fr));
+    gap:6px; padding:10px 12px;
+  }
+  .pf-item { display:flex; flex-direction:column; gap:2px; }
+  .pf-item label { font-size:10px; color:var(--muted); font-weight:600; }
+  .pf-row { display:flex; gap:4px; align-items:center; }
+  .pf-row input { flex:1; background:var(--input-bg); border:1px solid var(--border);
+    color:var(--text); border-radius:6px; padding:4px 8px; font-size:12px; }
+  .pf-row .copy-btn { padding:4px 9px; font-size:11px; }
+
+  .converter-box { background:var(--panel-2); border:1px solid var(--border);
+    border-radius:10px; padding:12px; margin-bottom:10px; }
+  .converter-box h4 { margin:0 0 6px; font-size:12px; font-weight:600; }
+  .converter-box .spec { font-size:10px; color:var(--muted); margin-bottom:8px; line-height:1.5; }
+  .conv-result { margin-top:8px; padding:8px; background:var(--input-bg);
+    border:1px solid var(--border); border-radius:6px; font-size:11px; }
+  .conv-result a { color:var(--accent); font-weight:600; }
 </style>
 </head>
 <body>
-
 <div class="topbar">
   <a class="back-link" href="/">← All tools</a>
   <span class="brand">SIRISHA STUDIO</span>
@@ -35,78 +80,70 @@
 </div>
 
 <h2>PAN Profile &amp; Converters</h2>
-
 <p style="text-align:center;color:var(--muted);max-width:760px;margin:0 auto 10px;font-size:12px">
-  Save applicant details once, copy to the PAN website anytime. Convert photo/signature/documents to PAN specs.
+  Save applicant details once, copy to the PAN website anytime. Multiple applicants supported.
 </p>
 
-<!-- TAB BAR -->
 <div class="tab-bar">
   <button class="tab-btn active" onclick="openTab('profile',this)">👤 Applicant Data</button>
   <button class="tab-btn" onclick="openTab('converters',this)">🖼 Image Converters</button>
   <button class="tab-btn" onclick="openTab('checklist',this)">📋 Field Checklist</button>
 </div>
 
-<div class="pan-page">
+<div class="tab-wrap">
 
   <!-- ===== TAB 1: PROFILE ===== -->
   <div id="tab_profile" class="tab-pane active">
 
     <div class="notice">
-      Fill once → Save → copy any field to paste on the PAN website. Data is saved locally on this machine.
+      Fill the form → <strong>Save with a name</strong> (auto-fills from the name you enter).
+      Saved profiles appear below — click <strong>Copy</strong> next to any field to copy it instantly.
     </div>
 
-    <!-- Name section -->
-    <div class="pan-section" style="margin-bottom:12px">
+    <div class="pan-section" style="margin-bottom:10px">
       <h3>Full Name</h3>
       <div class="name-group">
         <div class="pan-field">
           <label>First Name *</label>
           <div class="pan-copy-row">
             <input id="p_first_name" placeholder="e.g. TEJASWI">
-            <button class="copy-btn" onclick="copyField('p_first_name')">Copy</button>
+            <button class="copy-btn" onclick="copyVal(this.previousElementSibling)">Copy</button>
           </div>
         </div>
         <div class="pan-field">
           <label>Middle Name</label>
-          <div class="pan-copy-row">
-            <input id="p_middle_name" placeholder="(optional)">
-            <button class="copy-btn" onclick="copyField('p_middle_name')">Copy</button>
-          </div>
+          <input id="p_middle_name" placeholder="(optional)">
         </div>
         <div class="pan-field">
           <label>Last Name *</label>
           <div class="pan-copy-row">
             <input id="p_last_name" placeholder="e.g. ALLAMPILLI">
-            <button class="copy-btn" onclick="copyField('p_last_name')">Copy</button>
+            <button class="copy-btn" onclick="copyVal(this.previousElementSibling)">Copy</button>
           </div>
         </div>
         <div class="pan-field full-row">
           <label>Full Name (auto-combined)</label>
           <div class="pan-copy-row">
             <input id="p_full_name" readonly placeholder="Auto combined from above">
-            <button class="copy-btn" onclick="copyField('p_full_name')">Copy</button>
+            <button class="copy-btn" onclick="copyVal(this.previousElementSibling)">Copy</button>
           </div>
         </div>
       </div>
     </div>
 
     <div class="pan-profile-grid">
-
-      <!-- Personal -->
       <div class="pan-section">
         <h3>Personal Details</h3>
         <div class="pan-field">
           <label>Date of Birth * (DD/MM/YYYY)</label>
           <div class="pan-copy-row">
-            <input id="p_dob" placeholder="e.g. 15/08/2000">
-            <button class="copy-btn" onclick="copyField('p_dob')">Copy</button>
+            <input id="p_dob" placeholder="15/08/2000">
+            <button class="copy-btn" onclick="copyVal(this.previousElementSibling)">Copy</button>
           </div>
         </div>
         <div class="pan-field">
           <label>Gender</label>
-          <select id="p_gender">
-            <option value="">Select…</option>
+          <select id="p_gender"><option value="">Select…</option>
             <option>Male</option><option>Female</option><option>Transgender</option>
           </select>
         </div>
@@ -114,488 +151,409 @@
           <label>Aadhaar Number</label>
           <div class="pan-copy-row">
             <input id="p_aadhaar" placeholder="XXXX XXXX XXXX">
-            <button class="copy-btn" onclick="copyField('p_aadhaar')">Copy</button>
+            <button class="copy-btn" onclick="copyVal(this.previousElementSibling)">Copy</button>
           </div>
         </div>
       </div>
 
-      <!-- Mother -->
       <div class="pan-section">
         <h3>Mother's Name</h3>
-        <div class="name-group" style="grid-template-columns:1fr 1fr;">
-          <div class="pan-field">
-            <label>First Name</label>
+        <div class="name-group" style="grid-template-columns:1fr 1fr">
+          <div class="pan-field"><label>First</label>
             <div class="pan-copy-row">
-              <input id="p_mother_first" placeholder="First">
-              <button class="copy-btn" onclick="copyField('p_mother_first')">Copy</button>
-            </div>
-          </div>
-          <div class="pan-field">
-            <label>Middle Name</label>
-            <input id="p_mother_middle" placeholder="(optional)">
-          </div>
-          <div class="pan-field" style="grid-column:1/-1">
-            <label>Last Name</label>
+              <input id="p_mother_first">
+              <button class="copy-btn" onclick="copyVal(this.previousElementSibling)">Copy</button>
+            </div></div>
+          <div class="pan-field"><label>Middle</label><input id="p_mother_middle"></div>
+          <div class="pan-field full-row"><label>Last</label>
             <div class="pan-copy-row">
-              <input id="p_mother_last" placeholder="Last">
-              <button class="copy-btn" onclick="copyField('p_mother_last')">Copy</button>
-            </div>
-          </div>
-          <div class="pan-field" style="grid-column:1/-1">
-            <label>Full Mother's Name</label>
+              <input id="p_mother_last">
+              <button class="copy-btn" onclick="copyVal(this.previousElementSibling)">Copy</button>
+            </div></div>
+          <div class="pan-field full-row"><label>Full Mother's Name</label>
             <div class="pan-copy-row">
               <input id="p_mother_full" readonly placeholder="Auto-combined">
-              <button class="copy-btn" onclick="copyField('p_mother_full')">Copy</button>
-            </div>
-          </div>
+              <button class="copy-btn" onclick="copyVal(this.previousElementSibling)">Copy</button>
+            </div></div>
         </div>
       </div>
 
-      <!-- Father -->
       <div class="pan-section">
         <h3>Father's Name</h3>
-        <div class="name-group" style="grid-template-columns:1fr 1fr;">
-          <div class="pan-field">
-            <label>First Name</label>
+        <div class="name-group" style="grid-template-columns:1fr 1fr">
+          <div class="pan-field"><label>First</label>
             <div class="pan-copy-row">
-              <input id="p_father_first" placeholder="First">
-              <button class="copy-btn" onclick="copyField('p_father_first')">Copy</button>
-            </div>
-          </div>
-          <div class="pan-field">
-            <label>Middle Name</label>
-            <input id="p_father_middle" placeholder="(optional)">
-          </div>
-          <div class="pan-field" style="grid-column:1/-1">
-            <label>Last Name</label>
+              <input id="p_father_first">
+              <button class="copy-btn" onclick="copyVal(this.previousElementSibling)">Copy</button>
+            </div></div>
+          <div class="pan-field"><label>Middle</label><input id="p_father_middle"></div>
+          <div class="pan-field full-row"><label>Last</label>
             <div class="pan-copy-row">
-              <input id="p_father_last" placeholder="Last">
-              <button class="copy-btn" onclick="copyField('p_father_last')">Copy</button>
-            </div>
-          </div>
-          <div class="pan-field" style="grid-column:1/-1">
-            <label>Full Father's Name</label>
+              <input id="p_father_last">
+              <button class="copy-btn" onclick="copyVal(this.previousElementSibling)">Copy</button>
+            </div></div>
+          <div class="pan-field full-row"><label>Full Father's Name</label>
             <div class="pan-copy-row">
               <input id="p_father_full" readonly placeholder="Auto-combined">
-              <button class="copy-btn" onclick="copyField('p_father_full')">Copy</button>
-            </div>
-          </div>
+              <button class="copy-btn" onclick="copyVal(this.previousElementSibling)">Copy</button>
+            </div></div>
         </div>
       </div>
 
-      <!-- Contact -->
       <div class="pan-section">
-        <h3>Contact Details</h3>
+        <h3>Contact</h3>
         <div class="pan-field">
           <label>Email *</label>
           <div class="pan-copy-row">
-            <input id="p_email" type="email" placeholder="email@example.com">
-            <button class="copy-btn" onclick="copyField('p_email')">Copy</button>
+            <input id="p_email" type="email">
+            <button class="copy-btn" onclick="copyVal(this.previousElementSibling)">Copy</button>
           </div>
         </div>
         <div class="pan-field">
           <label>Mobile *</label>
           <div class="pan-copy-row">
-            <input id="p_mobile" placeholder="10-digit mobile">
-            <button class="copy-btn" onclick="copyField('p_mobile')">Copy</button>
+            <input id="p_mobile" placeholder="10-digit">
+            <button class="copy-btn" onclick="copyVal(this.previousElementSibling)">Copy</button>
           </div>
         </div>
       </div>
 
-      <!-- Address -->
       <div class="pan-section" style="grid-column:1/-1">
         <h3>Address</h3>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
-          <div class="pan-field">
-            <label>Door No.</label>
+          <div class="pan-field"><label>Door No.</label>
             <div class="pan-copy-row">
-              <input id="p_door_no" placeholder="Flat / Door No.">
-              <button class="copy-btn" onclick="copyField('p_door_no')">Copy</button>
-            </div>
-          </div>
-          <div class="pan-field" style="grid-column:2/-1">
-            <label>Street / Road</label>
+              <input id="p_door_no">
+              <button class="copy-btn" onclick="copyVal(this.previousElementSibling)">Copy</button>
+            </div></div>
+          <div class="pan-field" style="grid-column:2/-1"><label>Street / Road</label>
             <div class="pan-copy-row">
-              <input id="p_road" placeholder="Street / Road name">
-              <button class="copy-btn" onclick="copyField('p_road')">Copy</button>
-            </div>
-          </div>
-          <div class="pan-field">
-            <label>Post Office / Area</label>
+              <input id="p_road">
+              <button class="copy-btn" onclick="copyVal(this.previousElementSibling)">Copy</button>
+            </div></div>
+          <div class="pan-field"><label>Area / Post Office</label>
             <div class="pan-copy-row">
-              <input id="p_area" placeholder="Area / Post Office">
-              <button class="copy-btn" onclick="copyField('p_area')">Copy</button>
-            </div>
-          </div>
-          <div class="pan-field">
-            <label>City / Town</label>
+              <input id="p_area">
+              <button class="copy-btn" onclick="copyVal(this.previousElementSibling)">Copy</button>
+            </div></div>
+          <div class="pan-field"><label>City</label>
             <div class="pan-copy-row">
-              <input id="p_city" placeholder="City">
-              <button class="copy-btn" onclick="copyField('p_city')">Copy</button>
-            </div>
-          </div>
-          <div class="pan-field">
-            <label>PIN Code</label>
+              <input id="p_city">
+              <button class="copy-btn" onclick="copyVal(this.previousElementSibling)">Copy</button>
+            </div></div>
+          <div class="pan-field"><label>PIN Code</label>
             <div class="pan-copy-row">
-              <input id="p_pincode" placeholder="6-digit PIN">
-              <button class="copy-btn" onclick="copyField('p_pincode')">Copy</button>
-            </div>
-          </div>
+              <input id="p_pincode">
+              <button class="copy-btn" onclick="copyVal(this.previousElementSibling)">Copy</button>
+            </div></div>
         </div>
       </div>
-
-    </div><!-- end grid -->
-
-    <div class="save-bar">
-      <button class="btn primary" onclick="saveProfile()">💾 Save Profile</button>
-      <button class="btn" onclick="clearProfile()">🗑 Clear All</button>
     </div>
-    <p id="save_status" style="text-align:center;font-size:12px"></p>
+
+    <!-- SAVE BAR -->
+    <div class="save-bar">
+      <input id="save_label" placeholder="Label (auto-fills from name — edit to change)">
+      <button class="btn primary" onclick="saveProfile()">💾 Save</button>
+      <button class="btn" onclick="clearForm()">✕ Clear form</button>
+    </div>
+    <p id="save_status" style="font-size:12px;text-align:center"></p>
+
+    <!-- SAVED PROFILES LIST -->
+    <div class="profiles-head" onclick="toggleProfilesList()">
+      <h4>📋 Saved Profiles</h4>
+      <span id="profiles_count">0 saved</span>
+      <span id="profiles_chevron">▼</span>
+    </div>
+    <div id="profiles_body" class="profiles-body" style="display:none"></div>
 
   </div><!-- end tab_profile -->
 
   <!-- ===== TAB 2: CONVERTERS ===== -->
   <div id="tab_converters" class="tab-pane">
-
     <div class="notice">
-      Files are named using your saved name. Make sure you save your profile first.
+      Converts images to exact PAN website specifications. Filename uses the form data.
     </div>
-
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px">
 
-      <!-- Photo converter -->
       <div class="converter-box">
         <h4>📷 Photo Converter</h4>
-        <div class="spec">
-          Format: JPEG &nbsp;|&nbsp; DPI: 200 &nbsp;|&nbsp; Size: 3.5 × 2.5 cm &nbsp;|&nbsp; ≤ 50 KB
-          <br>Output: <strong>276 × 197 px</strong>
-        </div>
+        <div class="spec">JPEG · 200 DPI · 3.5 × 2.5 cm · ≤ 50 KB → <strong>276 × 197 px</strong></div>
         <input type="file" id="photo_file" accept=".jpg,.jpeg,.png,.webp,.bmp,.gif">
-        <div id="photo_preview_wrap" style="margin-top:6px;display:none">
-          <img id="photo_preview" class="converter-preview" style="display:block">
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button class="btn primary" onclick="doConvert('photo_file','/pan-profile/convert-photo','photo_res','photo_st')">⚙ Convert</button>
         </div>
-        <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
-          <button class="btn primary" onclick="convertPhoto()">⚙ Convert Photo</button>
-        </div>
-        <div id="photo_result" class="conv-result" style="display:none"></div>
-        <p id="photo_status" style="font-size:11px;color:var(--muted);margin-top:4px"></p>
+        <div id="photo_res" class="conv-result" style="display:none"></div>
+        <p id="photo_st" style="font-size:11px;color:var(--muted);margin-top:4px"></p>
       </div>
 
-      <!-- Signature converter -->
       <div class="converter-box">
         <h4>✍ Signature Converter</h4>
-        <div class="spec">
-          Format: JPEG &nbsp;|&nbsp; DPI: 200 &nbsp;|&nbsp; Size: 4.5 × 2.0 cm &nbsp;|&nbsp; ≤ 50 KB
-          <br>Output: <strong>354 × 157 px</strong>
-        </div>
+        <div class="spec">JPEG · 200 DPI · 4.5 × 2.0 cm · ≤ 50 KB → <strong>354 × 157 px</strong></div>
         <input type="file" id="sig_file" accept=".jpg,.jpeg,.png,.webp,.bmp,.gif">
-        <div id="sig_preview_wrap" style="margin-top:6px;display:none">
-          <img id="sig_preview" class="converter-preview" style="display:block">
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button class="btn primary" onclick="doConvert('sig_file','/pan-profile/convert-signature','sig_res','sig_st')">⚙ Convert</button>
         </div>
-        <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
-          <button class="btn primary" onclick="convertSig()">⚙ Convert Signature</button>
-        </div>
-        <div id="sig_result" class="conv-result" style="display:none"></div>
-        <p id="sig_status" style="font-size:11px;color:var(--muted);margin-top:4px"></p>
+        <div id="sig_res" class="conv-result" style="display:none"></div>
+        <p id="sig_st" style="font-size:11px;color:var(--muted);margin-top:4px"></p>
       </div>
 
-      <!-- Document converter -->
       <div class="converter-box">
         <h4>📄 Document Converter</h4>
-        <div class="spec">
-          Format: PDF &nbsp;|&nbsp; Max per page: 300 KB
-          <br>Accepts PDF, JPG, PNG — outputs compressed PDF
-        </div>
+        <div class="spec">PDF output · ≤ 300 KB per page · Accepts PDF, JPG, PNG</div>
         <input type="file" id="doc_file" accept=".pdf,.jpg,.jpeg,.png,.webp,.bmp">
-        <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
-          <button class="btn primary" onclick="convertDoc()">⚙ Convert Document</button>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button class="btn primary" onclick="doConvert('doc_file','/pan-profile/convert-document','doc_res','doc_st')">⚙ Convert</button>
         </div>
-        <div id="doc_result" class="conv-result" style="display:none"></div>
-        <p id="doc_status" style="font-size:11px;color:var(--muted);margin-top:4px"></p>
+        <div id="doc_res" class="conv-result" style="display:none"></div>
+        <p id="doc_st" style="font-size:11px;color:var(--muted);margin-top:4px"></p>
       </div>
 
     </div>
-  </div><!-- end tab_converters -->
+  </div>
 
   <!-- ===== TAB 3: CHECKLIST ===== -->
   <div id="tab_checklist" class="tab-pane">
     <div class="notice">
-      Reference for filling the PAN application form at
-      <a href="https://onlineservices.proteantech.in/paam/endUserRegisterContact.html"
-         target="_blank" style="color:var(--accent)">Protean PAN website</a>.
-      Click any field below to copy it from your saved profile.
+      Quick reference for the PAN form. Click Copy next to any field.
+      Load a saved profile from the <strong>Applicant Data</strong> tab first.
     </div>
-
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px">
-
       <div class="pan-section">
-        <h3>Section 1 — Applicant Info</h3>
-        <div id="chk_name" class="pan-field">
-          <label>Full Name</label>
-          <div class="pan-copy-row">
-            <input id="chk_full_name" readonly>
-            <button class="copy-btn" onclick="copyField('chk_full_name')">Copy</button>
-          </div>
-        </div>
-        <div class="pan-field">
-          <label>Date of Birth</label>
-          <div class="pan-copy-row">
-            <input id="chk_dob" readonly>
-            <button class="copy-btn" onclick="copyField('chk_dob')">Copy</button>
-          </div>
-        </div>
-        <div class="pan-field">
-          <label>Gender</label>
-          <div class="pan-copy-row">
-            <input id="chk_gender" readonly>
-            <button class="copy-btn" onclick="copyField('chk_gender')">Copy</button>
-          </div>
-        </div>
+        <h3>Applicant</h3>
+        <div class="pan-field"><label>Full Name</label><div class="pan-copy-row"><input id="chk_name" readonly><button class="copy-btn" onclick="copyVal(this.previousElementSibling)">Copy</button></div></div>
+        <div class="pan-field"><label>Date of Birth</label><div class="pan-copy-row"><input id="chk_dob" readonly><button class="copy-btn" onclick="copyVal(this.previousElementSibling)">Copy</button></div></div>
+        <div class="pan-field"><label>Gender</label><div class="pan-copy-row"><input id="chk_gender" readonly><button class="copy-btn" onclick="copyVal(this.previousElementSibling)">Copy</button></div></div>
+        <div class="pan-field"><label>Aadhaar</label><div class="pan-copy-row"><input id="chk_aadhaar" readonly><button class="copy-btn" onclick="copyVal(this.previousElementSibling)">Copy</button></div></div>
       </div>
-
       <div class="pan-section">
-        <h3>Section 2 — Parents</h3>
-        <div class="pan-field">
-          <label>Father's Name</label>
-          <div class="pan-copy-row">
-            <input id="chk_father" readonly>
-            <button class="copy-btn" onclick="copyField('chk_father')">Copy</button>
-          </div>
-        </div>
-        <div class="pan-field">
-          <label>Mother's Name</label>
-          <div class="pan-copy-row">
-            <input id="chk_mother" readonly>
-            <button class="copy-btn" onclick="copyField('chk_mother')">Copy</button>
-          </div>
-        </div>
+        <h3>Parents</h3>
+        <div class="pan-field"><label>Father's Name</label><div class="pan-copy-row"><input id="chk_father" readonly><button class="copy-btn" onclick="copyVal(this.previousElementSibling)">Copy</button></div></div>
+        <div class="pan-field"><label>Mother's Name</label><div class="pan-copy-row"><input id="chk_mother" readonly><button class="copy-btn" onclick="copyVal(this.previousElementSibling)">Copy</button></div></div>
       </div>
-
       <div class="pan-section">
-        <h3>Section 3 — Contact</h3>
-        <div class="pan-field">
-          <label>Email</label>
-          <div class="pan-copy-row">
-            <input id="chk_email" readonly>
-            <button class="copy-btn" onclick="copyField('chk_email')">Copy</button>
-          </div>
-        </div>
-        <div class="pan-field">
-          <label>Mobile</label>
-          <div class="pan-copy-row">
-            <input id="chk_mobile" readonly>
-            <button class="copy-btn" onclick="copyField('chk_mobile')">Copy</button>
-          </div>
-        </div>
+        <h3>Contact</h3>
+        <div class="pan-field"><label>Email</label><div class="pan-copy-row"><input id="chk_email" readonly><button class="copy-btn" onclick="copyVal(this.previousElementSibling)">Copy</button></div></div>
+        <div class="pan-field"><label>Mobile</label><div class="pan-copy-row"><input id="chk_mobile" readonly><button class="copy-btn" onclick="copyVal(this.previousElementSibling)">Copy</button></div></div>
       </div>
-
       <div class="pan-section" style="grid-column:1/-1">
-        <h3>Section 4 — Address</h3>
+        <h3>Address</h3>
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px">
-          <div class="pan-field">
-            <label>Door No.</label>
-            <div class="pan-copy-row">
-              <input id="chk_door" readonly>
-              <button class="copy-btn" onclick="copyField('chk_door')">Copy</button>
-            </div>
-          </div>
-          <div class="pan-field">
-            <label>Road / Street</label>
-            <div class="pan-copy-row">
-              <input id="chk_road" readonly>
-              <button class="copy-btn" onclick="copyField('chk_road')">Copy</button>
-            </div>
-          </div>
-          <div class="pan-field">
-            <label>Area / Post Office</label>
-            <div class="pan-copy-row">
-              <input id="chk_area" readonly>
-              <button class="copy-btn" onclick="copyField('chk_area')">Copy</button>
-            </div>
-          </div>
-          <div class="pan-field">
-            <label>City</label>
-            <div class="pan-copy-row">
-              <input id="chk_city" readonly>
-              <button class="copy-btn" onclick="copyField('chk_city')">Copy</button>
-            </div>
-          </div>
-          <div class="pan-field">
-            <label>PIN Code</label>
-            <div class="pan-copy-row">
-              <input id="chk_pin" readonly>
-              <button class="copy-btn" onclick="copyField('chk_pin')">Copy</button>
-            </div>
-          </div>
+          <div class="pan-field"><label>Door No.</label><div class="pan-copy-row"><input id="chk_door" readonly><button class="copy-btn" onclick="copyVal(this.previousElementSibling)">Copy</button></div></div>
+          <div class="pan-field"><label>Road / Street</label><div class="pan-copy-row"><input id="chk_road" readonly><button class="copy-btn" onclick="copyVal(this.previousElementSibling)">Copy</button></div></div>
+          <div class="pan-field"><label>Area / P.O.</label><div class="pan-copy-row"><input id="chk_area" readonly><button class="copy-btn" onclick="copyVal(this.previousElementSibling)">Copy</button></div></div>
+          <div class="pan-field"><label>City</label><div class="pan-copy-row"><input id="chk_city" readonly><button class="copy-btn" onclick="copyVal(this.previousElementSibling)">Copy</button></div></div>
+          <div class="pan-field"><label>PIN</label><div class="pan-copy-row"><input id="chk_pin" readonly><button class="copy-btn" onclick="copyVal(this.previousElementSibling)">Copy</button></div></div>
         </div>
       </div>
-
     </div>
-  </div><!-- end tab_checklist -->
+  </div>
 
-</div><!-- end pan-page -->
+</div><!-- end tab-wrap -->
 
-<div id="copy_toast" style="
-  position:fixed;bottom:30px;left:50%;transform:translateX(-50%);
+<!-- Toast -->
+<div id="copy_toast" style="position:fixed;bottom:30px;left:50%;transform:translateX(-50%);
   background:var(--ok);color:#fff;padding:8px 18px;border-radius:20px;
-  font-size:13px;pointer-events:none;opacity:0;transition:opacity .3s;z-index:9999">
-  Copied!
-</div>
+  font-size:13px;pointer-events:none;opacity:0;transition:opacity .3s;z-index:9999">Copied!</div>
 
 <script>
 const $ = id => document.getElementById(id);
+const FIELDS = ["first_name","middle_name","last_name","dob","aadhaar",
+  "mother_first","mother_middle","mother_last",
+  "father_first","father_middle","father_last",
+  "email","mobile","door_no","road","area","city","pincode"];
 
 // Tab switching
 window.openTab = function(name, btn){
-  document.querySelectorAll(".tab-pane").forEach(p => p.classList.remove("active"));
-  document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
-  $("tab_"+name).classList.add("active");
-  btn.classList.add("active");
-  if(name === "checklist") syncChecklist();
+  document.querySelectorAll(".tab-pane").forEach(p=>p.classList.remove("active"));
+  document.querySelectorAll(".tab-btn").forEach(b=>b.classList.remove("active"));
+  $("tab_"+name).classList.add("active"); btn.classList.add("active");
+  if(name==="checklist") syncChecklist();
 };
 
 // -------- Copy --------
-window.copyField = function(id){
-  const el = $(id);
-  if(!el) return;
-  const val = el.value.trim();
-  if(!val) return;
-  navigator.clipboard.writeText(val).catch(() => {
-    el.select(); document.execCommand("copy");
-  });
-  const toast = $("copy_toast");
-  toast.style.opacity = "1";
-  setTimeout(() => toast.style.opacity = "0", 1500);
+window.copyVal = function(el){
+  const v = el.value.trim(); if(!v) return;
+  navigator.clipboard.writeText(v).catch(()=>{ el.select(); document.execCommand("copy"); });
+  const t=$("copy_toast"); t.style.opacity="1"; setTimeout(()=>t.style.opacity="0",1500);
 };
 
 // -------- Auto-combine names --------
 function updateCombined(){
-  const fn = $("p_first_name").value.trim();
-  const mn = $("p_middle_name").value.trim();
-  const ln = $("p_last_name").value.trim();
-  $("p_full_name").value = [fn,mn,ln].filter(Boolean).join(" ");
-
-  const mf = $("p_mother_first").value.trim();
-  const mm = $("p_mother_middle").value.trim();
-  const ml = $("p_mother_last").value.trim();
-  $("p_mother_full").value = [mf,mm,ml].filter(Boolean).join(" ");
-
-  const ff = $("p_father_first").value.trim();
-  const fm = $("p_father_middle").value.trim();
-  const fl = $("p_father_last").value.trim();
-  $("p_father_full").value = [ff,fm,fl].filter(Boolean).join(" ");
+  $("p_full_name").value = [
+    $("p_first_name").value.trim(),
+    $("p_middle_name").value.trim(),
+    $("p_last_name").value.trim()
+  ].filter(Boolean).join(" ");
+  $("p_mother_full").value = [
+    $("p_mother_first").value.trim(),
+    $("p_mother_middle").value.trim(),
+    $("p_mother_last").value.trim()
+  ].filter(Boolean).join(" ");
+  $("p_father_full").value = [
+    $("p_father_first").value.trim(),
+    $("p_father_middle").value.trim(),
+    $("p_father_last").value.trim()
+  ].filter(Boolean).join(" ");
+  // Auto-fill save label
+  const lbl = $("p_full_name").value.trim();
+  if(lbl) $("save_label").value = lbl;
 }
 
 ["p_first_name","p_middle_name","p_last_name",
  "p_mother_first","p_mother_middle","p_mother_last",
  "p_father_first","p_father_middle","p_father_last"
-].forEach(id => {
-  const el = $(id);
-  if(el) el.addEventListener("input", updateCombined);
-});
+].forEach(id=>{ const el=$(id); if(el) el.addEventListener("input", updateCombined); });
 
-// -------- Load profile from server --------
-const FIELDS = ["first_name","middle_name","last_name","dob","gender","aadhaar",
-  "mother_first","mother_middle","mother_last",
-  "father_first","father_middle","father_last",
-  "email","mobile","door_no","road","area","city","pincode"];
+// -------- Profiles list --------
+let profilesVisible = false;
 
-function loadProfile(){
-  fetch("/pan-profile/data").then(r=>r.json()).then(d => {
-    FIELDS.forEach(k => {
-      const el = $("p_"+k);
-      if(el && d[k] !== undefined) el.value = d[k];
-    });
-    if(d.gender) $("p_gender").value = d.gender;
-    updateCombined();
+window.toggleProfilesList = function(){
+  profilesVisible = !profilesVisible;
+  $("profiles_body").style.display = profilesVisible ? "" : "none";
+  $("profiles_chevron").textContent = profilesVisible ? "▲" : "▼";
+  if(profilesVisible) loadProfilesList();
+};
+
+function fmtDate(epoch){
+  return epoch ? new Date(epoch*1000).toLocaleDateString("en-IN") : "";
+}
+
+function loadProfilesList(){
+  fetch("/pan-profile/profiles").then(r=>r.json()).then(d=>{
+    const profiles = d.profiles || [];
+    $("profiles_count").textContent = profiles.length + " saved";
+    const body = $("profiles_body");
+    if(!profiles.length){
+      body.innerHTML = '<p style="color:var(--muted);font-size:12px;text-align:center;padding:12px">No profiles saved yet.</p>';
+      return;
+    }
+    body.innerHTML = profiles.slice().reverse().map(p => {
+      const label = p.label || "?";
+      const fn = [p.first_name||"", p.middle_name||"", p.last_name||""].filter(Boolean).join(" ");
+      const father_full = [p.father_first||"", p.father_middle||"", p.father_last||""].filter(Boolean).join(" ");
+      const mother_full = [p.mother_first||"", p.mother_middle||"", p.mother_last||""].filter(Boolean).join(" ");
+      const addr_parts = [p.door_no, p.road, p.area, p.city, p.pincode].filter(Boolean).join(", ");
+
+      const copyField = (val, id) => val
+        ? `<div class="pf-item"><label>${id}</label><div class="pf-row"><input value="${val.replace(/"/g,'&quot;')}" readonly><button class="copy-btn" onclick="copyVal(this.previousElementSibling)">Copy</button></div></div>`
+        : "";
+
+      return `<div class="profile-card">
+        <div class="profile-card-head">
+          <strong>${label}</strong>
+          <span class="ts">${fmtDate(p.saved_at)}</span>
+          <button class="load-btn" onclick='loadProfile(${JSON.stringify(JSON.stringify(p))})'>Load into form</button>
+          <button class="del-btn" onclick="deleteProfile('${label.replace(/'/g,"\\'")}')">Delete</button>
+        </div>
+        <div class="profile-card-fields">
+          ${copyField(fn,           "Full Name")}
+          ${copyField(p.dob||"",   "Date of Birth")}
+          ${copyField(father_full,  "Father's Name")}
+          ${copyField(mother_full,  "Mother's Name")}
+          ${copyField(p.mobile||"","Mobile")}
+          ${copyField(p.email||"", "Email")}
+          ${copyField(p.aadhaar||"","Aadhaar")}
+          ${copyField(addr_parts,   "Address")}
+        </div>
+      </div>`;
+    }).join("");
   });
 }
 
+window.loadProfile = function(jsonStr){
+  const p = JSON.parse(jsonStr);
+  FIELDS.forEach(k => { const el=$("p_"+k); if(el) el.value = p[k] || ""; });
+  $("p_gender").value = p.gender || "";
+  updateCombined();
+  // Switch to profile tab
+  document.querySelectorAll(".tab-btn")[0].click();
+  window.scrollTo({ top:0, behavior:"smooth" });
+  $("save_status").innerText = "✓ Profile loaded from saved list";
+  $("save_status").style.color = "var(--ok)";
+  setTimeout(() => $("save_status").innerText="",3000);
+};
+
+window.deleteProfile = function(label){
+  if(!confirm("Delete profile "" + label + ""?")) return;
+  fetch("/pan-profile/delete", {
+    method:"POST", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({ label })
+  }).then(r=>r.json()).then(()=>loadProfilesList());
+};
+
+// -------- Save --------
 window.saveProfile = function(){
-  const data = {};
-  FIELDS.forEach(k => {
-    const el = $("p_"+k);
-    if(el) data[k] = el.value.trim();
-  });
+  const label = $("save_label").value.trim();
+  if(!label){ alert("Enter a label/name for this profile."); return; }
+  const data = { label };
+  FIELDS.forEach(k => { const el=$("p_"+k); if(el) data[k] = el.value.trim(); });
   data.gender = $("p_gender").value;
-  fetch("/pan-profile/data", {
+  fetch("/pan-profile/save", {
     method:"POST", headers:{"Content-Type":"application/json"},
     body: JSON.stringify(data)
   }).then(r=>r.json()).then(d=>{
-    const s = $("save_status");
-    s.innerText = d.ok ? "✓ Saved successfully" : "Error saving";
-    s.style.color = d.ok ? "var(--ok)" : "var(--danger)";
-    setTimeout(()=>s.innerText="", 3000);
-    syncChecklist();
+    const s=$("save_status");
+    if(d.ok){
+      s.innerText = "✓ Saved as "" + label + """;
+      s.style.color = "var(--ok)";
+      // Open profiles list and refresh
+      if(!profilesVisible) toggleProfilesList();
+      else loadProfilesList();
+      fetch("/pan-profile/profiles").then(r=>r.json()).then(d2=>
+        $("profiles_count").textContent = (d2.profiles||[]).length + " saved"
+      );
+    } else {
+      s.innerText = d.error||"Error"; s.style.color="var(--danger)";
+    }
+    setTimeout(()=>s.innerText="",4000);
   });
 };
 
-window.clearProfile = function(){
-  if(!confirm("Clear all saved profile data?")) return;
-  FIELDS.forEach(k => { const el=$("p_"+k); if(el) el.value=""; });
-  $("p_gender").value = "";
+window.clearForm = function(){
+  FIELDS.forEach(k=>{ const el=$("p_"+k); if(el) el.value=""; });
+  $("p_gender").value="";
+  $("save_label").value="";
   updateCombined();
 };
 
 function syncChecklist(){
-  $("chk_full_name").value = $("p_full_name").value;
-  $("chk_dob").value       = $("p_dob").value;
-  $("chk_gender").value    = $("p_gender").value;
-  $("chk_father").value    = $("p_father_full").value;
-  $("chk_mother").value    = $("p_mother_full").value;
-  $("chk_email").value     = $("p_email").value;
-  $("chk_mobile").value    = $("p_mobile").value;
-  $("chk_door").value      = $("p_door_no").value;
-  $("chk_road").value      = $("p_road").value;
-  $("chk_area").value      = $("p_area").value;
-  $("chk_city").value      = $("p_city").value;
-  $("chk_pin").value       = $("p_pincode").value;
+  $("chk_name").value   = $("p_full_name").value;
+  $("chk_dob").value    = $("p_dob").value;
+  $("chk_gender").value = $("p_gender").value;
+  $("chk_aadhaar").value= $("p_aadhaar").value;
+  $("chk_father").value = $("p_father_full").value;
+  $("chk_mother").value = $("p_mother_full").value;
+  $("chk_email").value  = $("p_email").value;
+  $("chk_mobile").value = $("p_mobile").value;
+  $("chk_door").value   = $("p_door_no").value;
+  $("chk_road").value   = $("p_road").value;
+  $("chk_area").value   = $("p_area").value;
+  $("chk_city").value   = $("p_city").value;
+  $("chk_pin").value    = $("p_pincode").value;
 }
-
-// -------- File preview --------
-$("photo_file").addEventListener("change", function(){
-  if(!this.files.length) return;
-  const url = URL.createObjectURL(this.files[0]);
-  $("photo_preview").src = url;
-  $("photo_preview_wrap").style.display = "";
-});
-$("sig_file").addEventListener("change", function(){
-  if(!this.files.length) return;
-  const url = URL.createObjectURL(this.files[0]);
-  $("sig_preview").src = url;
-  $("sig_preview_wrap").style.display = "";
-});
 
 // -------- Converters --------
-function doConvert(fileId, endpoint, resultId, statusId){
+window.doConvert = function(fileId, endpoint, resId, stId){
   const f = $(fileId).files[0];
-  if(!f){ $(statusId).innerText="Pick a file first"; return; }
-  $(statusId).innerText = "Converting…";
-  $(resultId).style.display = "none";
-  const fd = new FormData();
-  fd.append("file", f);
-  fetch(endpoint, { method:"POST", body:fd })
-    .then(r=>r.json())
-    .then(d=>{
-      if(d.error){ $(statusId).innerText="Error: "+d.error; return; }
-      $(statusId).innerText = `Done ✓  ${d.dims||""}  ${d.size_kb||d.total_kb||""}KB  ${d.pages?d.pages+" pages":""}`;
-      $(statusId).style.color = "var(--ok)";
-      $(resultId).style.display = "";
-      $(resultId).innerHTML = `<a href="${d.out}" download>⤓ Download ${d.name}</a>`;
-      // update preview if photo
-      if(fileId === "photo_file" && d.out){
-        $("photo_preview").src = d.out + "?t=" + Date.now();
-        $("photo_preview_wrap").style.display = "";
-      }
-    }).catch(e => { $(statusId).innerText = "Error: "+e; });
-}
+  if(!f){ $(stId).innerText="Pick a file first"; return; }
+  $(stId).innerText="Converting…";
+  $(resId).style.display="none";
+  const fd=new FormData(); fd.append("file",f);
+  fetch(endpoint,{method:"POST",body:fd}).then(r=>r.json()).then(d=>{
+    if(d.error){ $(stId).innerText="Error: "+d.error; return; }
+    $(stId).innerText = `Done ✓  ${d.dims||""}  ${d.size_kb||d.total_kb||""}KB  ${d.pages?d.pages+" pages":""}`;
+    $(stId).style.color="var(--ok)";
+    $(resId).style.display="";
+    $(resId).innerHTML=`<a href="${d.out}" download>⤓ Download ${d.name}</a>`;
+  }).catch(e=>$(stId).innerText="Error: "+e);
+};
 
-window.convertPhoto = () => doConvert("photo_file", "/pan-profile/convert-photo", "photo_result", "photo_status");
-window.convertSig   = () => doConvert("sig_file",   "/pan-profile/convert-signature", "sig_result", "sig_status");
-window.convertDoc   = () => doConvert("doc_file",   "/pan-profile/convert-document", "doc_result", "doc_status");
-
-// Load on page open
-document.addEventListener("DOMContentLoaded", loadProfile);
+document.addEventListener("DOMContentLoaded", function(){
+  // Load profiles count
+  fetch("/pan-profile/profiles").then(r=>r.json()).then(d=>{
+    $("profiles_count").textContent = (d.profiles||[]).length + " saved";
+  });
+});
 </script>
 </body>
 </html>
